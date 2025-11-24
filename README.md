@@ -1,2 +1,2 @@
 # Procedural-textures-based-on-edge-selection
-ВКР 4 курс
+Репозиторий для ВКР 4 курса.
