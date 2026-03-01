@@ -88,3 +88,7 @@ x64/
 *.idb
 *.recipe
 *.FileListAbsolute.txt
+
+\images
+
+Run.txt
