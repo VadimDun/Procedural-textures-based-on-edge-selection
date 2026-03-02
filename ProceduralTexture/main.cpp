@@ -9,8 +9,11 @@
 #include "TextureAnalysis.h"
 #include "TextureSynthesis.h"
 #include "PixelSynthesis.h"
+#include "Config.h" // не придумал как спрятать путь от гита
 
 using namespace EBPTns;
+
+bool isCanny = false;
 
 cv::Mat createTestImage(int width = 400, int height = 400) {
     cv::Mat image = cv::Mat::zeros(height, width, CV_8UC3);
@@ -85,21 +88,81 @@ int main(int argc, char** argv) {
         analyzer.setGroupingDistance(60);
     }
 
-    std::vector<Edge> edges = analyzer.extractEdges(input_image);
-    cv::Mat edges_visualization = analyzer.visualizeEdges(input_image, edges);
-    cv::imwrite("images/edges_detected.png", edges_visualization);
+    //std::vector<Edge> edges = analyzer.extractEdges(input_image);
+    //cv::Mat edges_visualization = analyzer.visualizeEdges(input_image, edges);
+    //cv::imwrite("images/edges_detected.png", edges_visualization);
 
-    std::vector<EdgeGroup> groups = analyzer.groupEdges(edges);
-    cv::Mat groups_visualization = analyzer.visualizeGroups(input_image, groups);
-    cv::imwrite("images/groups_detected.png", groups_visualization);
+    //std::vector<EdgeGroup> groups = analyzer.groupEdges(edges);
+    //cv::Mat groups_visualization = analyzer.visualizeGroups(input_image, groups);
+    //cv::imwrite("images/groups_detected.png", groups_visualization);
 
-    // Создаем EBPT модель
-    EBPT ebpt_model(input_image);
 
-    for (const auto& group : groups) {
-        ebpt_model.addEdgeGroup(group);
+    //// Создаем EBPT модель
+    //EBPT ebpt_model(input_image);
+    //for (const auto& group : groups) {
+    //    ebpt_model.addEdgeGroup(group);
+    //}
+    //EBPT ebpt_model = analyzer.analyzeTexture(input_image);
+    //EBPT ebpt_model = analyzer.analyzeTextureStructured(input_image, MODEL_PATH);
+
+    AnalysisResult result;
+    cv::Mat prob_map;
+
+    if (isCanny) {
+        // Canny
+        result = analyzer.analyzeTexture(input_image);
+    }
+    else {
+        // Structured forests
+        result = analyzer.analyzeTextureStructured(input_image, MODEL_PATH);
+        prob_map = result.edge_probability_map;
     }
 
+    EBPT ebpt_model = result.modelEBPT;
+    std::vector<Edge> edges = result.edges;
+    std::vector<EdgeGroup> groups = result.groups;
+    cv::Mat edges_visualization = result.edges_visualization;
+    cv::Mat groups_visualization = result.groups_visualization;
+
+    if (!result.isValid()) { return 1; }
+
+    /////////////////////////////
+    // Карта вероятностей
+    /////////////////////////////
+
+    cv::Mat prob_map_display = result.edge_probability_map * 255;
+    prob_map_display.convertTo(prob_map_display, CV_8UC1);
+    cv::imwrite("images/probability_map.png", prob_map_display);
+
+    double thresholds[] = { 0.2, 0.4, 0.6, 0.8 };
+    for (double th : thresholds) {
+        cv::Mat binary;
+        cv::threshold(result.edge_probability_map, binary, th, 255, cv::THRESH_BINARY);
+        binary.convertTo(binary, CV_8UC1);
+        cv::imwrite("images/edges_th_" + std::to_string(th) + ".png", binary);
+    }
+
+    int histSize = 20;
+    float range[] = { 0, 1 };
+    const float* histRange = { range };
+    cv::Mat hist;
+    cv::calcHist(&result.edge_probability_map, 1, 0, cv::Mat(),
+        hist, 1, &histSize, &histRange);
+
+    // Нормализуем для отображения
+    cv::normalize(hist, hist, 0, 255, cv::NORM_MINMAX);
+
+    // Смотрим результат
+    //std::cout << "Распределение вероятностей:" << std::endl;
+    //for (int i = 0; i < histSize; i++) {
+    //    float bin_start = i * (1.0f / histSize);
+    //    float bin_end = (i + 1) * (1.0f / histSize);
+    //    float value = hist.at<float>(i);
+    //    std::cout << "  " << bin_start << "-" << bin_end << ": "
+    //        << value << " пикселей" << std::endl;
+    //}
+
+    //////////////////////////////////
     float scale = 1.0f;
     float density = 0.7f;
     float angle_spread = 0.3f;

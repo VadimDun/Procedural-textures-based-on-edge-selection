@@ -90,5 +90,7 @@ x64/
 *.FileListAbsolute.txt
 
 \images
+\model.yml
 
 Run.txt
+Config.h

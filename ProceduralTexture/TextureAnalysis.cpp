@@ -1,7 +1,8 @@
-#include "TextureAnalysis.h"
+﻿#include "TextureAnalysis.h"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <fstream>
 
 namespace EBPTns {
 
@@ -24,20 +25,147 @@ namespace EBPTns {
         grouping_distance_ = distance;
     }
 
-    EBPT TextureAnalysis::analyzeTexture(const cv::Mat& input_image) {
-        std::vector<Edge> edges = extractEdges(input_image);
-        if (edges.empty()) {
-            return EBPT(input_image);
+    // Structured forests
+    bool TextureAnalysis::initializeStructuredDetector(const std::string& model_path) {
+        // Существует ли файл модели
+        std::ifstream model_file(model_path);
+        if (!model_file.good()) {
+            std::cerr << "TextureAnalysis::initializeStructuredDetector: Model isn't found at path: " << model_path << std::endl;
+            is_structured_initialized_ = false;
+            return false;
         }
+
+        try {
+            structured_edge_detector_ = cv::ximgproc::createStructuredEdgeDetection(model_path);
+            is_structured_initialized_ = true;
+            std::cout << "StructuredEdgeDetection inited" << std::endl;
+            return true;
+        }
+        catch (const cv::Exception& e) {
+            std::cerr << "TextureAnalysis::initializeStructuredDetector: StructuredEdgeDetection didn't created: " << e.what() << std::endl;
+            is_structured_initialized_ = false;
+            return false;
+        }
+    }
+
+    std::vector<Edge> TextureAnalysis::extractEdgesStructured(const cv::Mat& image, cv::Mat edge_probability_map) {
+        std::vector<Edge> edges;
+
+        if (image.empty()) {
+            std::cerr << "Empty image" << std::endl;
+            return edges;
+        }
+
+        if (!is_structured_initialized_) {
+            std::cerr << "TextureAnalysis::extractEdgesStructured: StructuredEdgeDetection didn't created "
+                << "Firstly call analyzeTextureStructured or initializeStructuredDetector" << std::endl;
+            return edges;
+        }
+
+        // Бинаризуем карту вероятностей (порог можно подобрать)
+        cv::Mat binary_edges;
+        double threshold = 0.25; // todo сделать изменение порога в ручном формате в процессе работы программы, либо автоматический подбор
+        cv::threshold(edge_probability_map, binary_edges, threshold, 255, cv::THRESH_BINARY);
+        binary_edges.convertTo(binary_edges, CV_8UC1);
+
+        auto contours = findContours(binary_edges);
+
+        // Фильтруем и создаем объекты Edge
+        for (const auto& contour : contours) {
+            if (contour.size() < 2) continue;
+
+            auto simplified = simplifyContour(contour);
+
+            float length = 0;
+            for (size_t i = 1; i < simplified.size(); ++i) {
+                float dx = simplified[i].x - simplified[i - 1].x;
+                float dy = simplified[i].y - simplified[i - 1].y;
+                length += std::sqrt(dx * dx + dy * dy);
+            }
+
+            if (length < min_edge_length_) {
+                continue;
+            }
+
+            Edge edge(simplified);
+            edges.push_back(edge);
+        }
+
+        return edges;
+    }
+
+    AnalysisResult TextureAnalysis::analyzeTextureStructured(
+        const cv::Mat& input_image,
+        const std::string& model_path) {
+
+        std::cout << "Picture size: " << input_image.cols << "x" << input_image.rows << std::endl;
+
+        AnalysisResult empty_result;
+
+        if (!initializeStructuredDetector(model_path)) {
+            std::cerr << "TextureAnalysis::analyzeTextureStructured: StructuredForests didn't created" << std::endl;
+            return empty_result;
+        }
+
+        // Конвертируем в float и нормализуем
+        cv::Mat float_image;
+        if (input_image.channels() == 3) {
+            cv::cvtColor(input_image, float_image, cv::COLOR_BGR2RGB); // Модель обучена на RGB
+        }
+        else {
+            cv::cvtColor(input_image, float_image, cv::COLOR_GRAY2RGB); // Если grayscale, делаем 3 канала
+        }
+        float_image.convertTo(float_image, CV_32FC3, 1.0 / 255.0);
+
+        cv::Mat edge_probability_map;
+        structured_edge_detector_->detectEdges(float_image, edge_probability_map);
+
+        // Получаем рёбра
+        std::vector<Edge> edges = extractEdgesStructured(input_image, edge_probability_map);
+        if (edges.empty()) {
+            std::cerr << "Any edge didn't found" << std::endl;
+            return empty_result;
+        }
+
         std::vector<EdgeGroup> groups = groupEdges(edges);
         if (groups.empty()) {
-            return EBPT(input_image);
+            std::cerr << "Any group didn't created" << std::endl;
+            return empty_result;
         }
+
+        // Создаем EBPT
         EBPT ebpt_model(input_image);
         for (const auto& group : groups) {
             ebpt_model.addEdgeGroup(group);
         }
-        return ebpt_model;
+
+        // Создаем визуализации для отладки. Todo потом может удалить
+        cv::Mat edges_visualization = visualizeEdges(input_image, edges);
+        cv::Mat groups_visualization = visualizeGroups(input_image, groups);
+
+        std::cout << "   Edges found: " << edges.size() << std::endl;
+        std::cout << "   Groups created: " << groups.size() << std::endl;
+
+        return AnalysisResult(ebpt_model, edges, groups,
+            edges_visualization, groups_visualization,
+            edge_probability_map);
+    }
+
+    AnalysisResult TextureAnalysis::analyzeTexture(const cv::Mat& input_image) {
+        AnalysisResult result;
+
+        result.edges = extractEdges(input_image);
+        result.edges_visualization = visualizeEdges(input_image, result.edges);
+
+        result.groups = groupEdges(result.edges);
+        result.groups_visualization = visualizeGroups(input_image, result.groups);
+
+        result.modelEBPT = EBPT(input_image);
+        for (const auto& group : result.groups) {
+            result.modelEBPT.addEdgeGroup(group);
+        }
+
+        return result;
     }
 
     std::vector<Edge> TextureAnalysis::extractEdges(const cv::Mat& image) {
