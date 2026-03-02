@@ -91,6 +91,10 @@ namespace EBPTns {
             edges.push_back(edge);
         }
 
+        std::sort(edges.begin(), edges.end(),
+            [](const auto& a, const auto& b) {
+                return a.getLength() > b.getLength();
+            });
         return edges;
     }
 
@@ -188,18 +192,19 @@ namespace EBPTns {
             canny_high_threshold_);
         auto contours = findContours(edges_image);
         for (const auto& contour : contours) {
-            if (contour.size() < 2) continue;
-            auto& simplified = contour;
-            float length = 0;
-            for (size_t i = 1; i < simplified.size(); ++i) {
-                float dx = simplified[i].x - simplified[i - 1].x;
-                float dy = simplified[i].y - simplified[i - 1].y;
-                length += std::sqrt(dx * dx + dy * dy);
-            }
-            if (length < min_edge_length_) {
-                continue;
-            }
-            Edge edge(simplified);
+            if (contour.size() < min_edge_length_) continue;
+            //auto& simplified = contour;
+            //float length = 0;
+            //for (size_t i = 1; i < simplified.size(); ++i) {
+            //    float dx = simplified[i].x - simplified[i - 1].x;
+            //    float dy = simplified[i].y - simplified[i - 1].y;
+            //    length += std::sqrt(dx * dx + dy * dy);
+            //}
+            //if (length < min_edge_length_) {
+            //    continue;
+            //}
+            Edge edge(contour);
+            //if (edge.getLength() < min_edge_length_) continue;
             edges.push_back(edge);
         }
         std::sort(edges.begin(), edges.end(),
