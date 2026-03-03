@@ -3,6 +3,8 @@
 #include <opencv4/opencv2/ximgproc.hpp>
 #include <vector>
 #include <memory>
+#include <string>
+#include <unordered_map>
 #include "Edge.h"
 #include "EdgeGroup.h"
 #include "EBPT.h"
@@ -16,6 +18,7 @@ namespace EBPTns {
         cv::Mat edges_visualization;
         cv::Mat groups_visualization;
         cv::Mat edge_probability_map;        // Для Structured Forests (карта вероятностей)
+        cv::Mat superpixel_visualization;  // Визуализация суперпикселей
 
         AnalysisResult() = default;
 
@@ -51,9 +54,19 @@ namespace EBPTns {
         AnalysisResult analyzeTexture(const cv::Mat& input_image);
         AnalysisResult analyzeTextureStructured(const cv::Mat& input_image, const std::string& model_path = "model.yml");
 
+        AnalysisResult analyzeTextureWithSuperpixels(const cv::Mat& input_image,
+            int region_size = 30,
+            float ruler = 10.0f);
+        AnalysisResult analyzeTextureWithSuperpixelsStructured(
+            const cv::Mat& input_image,
+            const std::string& model_path,
+            int region_size = 30,
+            float ruler = 10.0f);
+
         void setCannyThresholds(double low = 50, double high = 150);
         void setMinEdgeLength(int min_length = 10);
         void setGroupingDistance(int distance = 30);
+        void setSuperpixelParams(int region_size = 30, float ruler = 10.0f);
 
         std::vector<Edge> extractEdges(const cv::Mat& image);
         std::vector<Edge> extractEdgesStructured(const cv::Mat& image, cv::Mat edge_probability_map);
@@ -64,12 +77,19 @@ namespace EBPTns {
         cv::Mat visualizeGroups(const cv::Mat& image,
             const std::vector<EdgeGroup>& groups);
 
+        cv::Mat computeSuperpixels(const cv::Mat& image, int region_size, float ruler);
+        std::unordered_map<int, std::vector<Edge>> assignEdgesToSuperpixels(const std::vector<Edge>& edges, const cv::Mat& labels);
+        cv::Mat visualizeSuperpixels(const cv::Mat& image, const cv::Mat& labels);
+
     private:
         double canny_low_threshold_ = 50.0;
         double canny_high_threshold_ = 150.0;
 
         int min_edge_length_ = 10;  
         int grouping_distance_ = 30;
+
+        int superpixel_region_size_ = 30;
+        float superpixel_ruler_ = 10.0f;
 
         // Structured Forests
         cv::Ptr<cv::ximgproc::StructuredEdgeDetection> structured_edge_detector_;
