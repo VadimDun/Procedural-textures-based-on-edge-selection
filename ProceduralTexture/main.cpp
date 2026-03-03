@@ -173,6 +173,264 @@ static void visualizeAnglesOnly(const std::vector<EBPTns::Edge>& edges,
     cv::imwrite(filename, angle_viz);
 }
 
+void visualizeEdgeBins(const cv::Mat& input_image,
+    const std::vector<EBPTns::Edge>& edges,
+    const std::string& filename = "images/edge_bins.png") {
+
+    if (edges.empty()) {
+        std::cout << "No edges to visualize" << std::endl;
+        return;
+    }
+
+    // Находим минимальную и максимальную длину для нормализации
+    float min_length = edges[0].getLength();
+    float max_length = edges[0].getLength();
+    for (const auto& edge : edges) {
+        float len = edge.getLength();
+        if (len < min_length) min_length = len;
+        if (len > max_length) max_length = len;
+    }
+
+    int img_width = input_image.cols;
+    int img_height = input_image.rows;
+
+    // Добавляем отступы между изображениями
+    int padding = 20;
+    int header_height = 40;
+
+    // Создаем 9 изображений для бинов (каждое такого же размера, как исходное)
+    std::vector<cv::Mat> bin_images(9);
+    for (int i = 0; i < 9; ++i) {
+        if (input_image.channels() == 1) {
+            cv::cvtColor(input_image, bin_images[i], cv::COLOR_GRAY2BGR);
+        }
+        else {
+            bin_images[i] = input_image.clone();
+        }
+        // Затемняем фон, чтобы ребра были видны ярче
+        cv::addWeighted(bin_images[i], 0.3, cv::Mat::zeros(bin_images[i].size(), bin_images[i].type()), 0.7, 0, bin_images[i]);
+    }
+
+    // Распределяем ребра по бинам
+    for (const auto& edge : edges) {
+        float length = edge.getLength();
+        float angle = edge.getAngle();  // 0 to PI
+
+        // Нормализуем длину к [0, 2] (3 бина)
+        float norm_length = 0.0f;
+        if (max_length > min_length) {
+            norm_length = (length - min_length) / (max_length - min_length) * 2.0f;
+        }
+
+        // Определяем бины
+        int length_bin = static_cast<int>(norm_length);
+        if (length_bin > 2) length_bin = 2;
+
+        int angle_bin = 0;
+        if (angle < CV_PI / 3) angle_bin = 0;           // 0-60°
+        else if (angle < 2 * CV_PI / 3) angle_bin = 1;  // 60-120°
+        else angle_bin = 2;                              // 120-180°
+
+        int bin_index = length_bin * 3 + angle_bin;
+
+        // Рисуем ребро ТОЛЬКО в соответствующем бине
+        cv::Mat& bin_img = bin_images[bin_index];
+        const auto& points = edge.getPoints();
+
+        // Рисуем линии
+        for (size_t i = 1; i < points.size(); ++i) {
+            cv::line(bin_img, points[i - 1], points[i],
+                cv::Scalar(0, 255, 0), 2, cv::LINE_AA);
+        }
+
+        // Рисуем центр ребра
+        cv::Point center(static_cast<int>(edge.getCenter().x),
+            static_cast<int>(edge.getCenter().y));
+        cv::circle(bin_img, center, 3, cv::Scalar(0, 0, 255), -1);
+    }
+
+    // Создаем итоговое изображение для отображения всех 9 бинов
+    int grid_width = img_width * 3 + padding * 4;
+    int grid_height = img_height * 3 + header_height + padding * 4;
+    cv::Mat grid = cv::Mat::zeros(grid_height, grid_width, CV_8UC3);
+    grid.setTo(cv::Scalar(50, 50, 50));
+
+    // Заголовки
+    std::vector<std::string> length_labels = { "Short", "Medium", "Long" };
+    std::vector<std::string> angle_labels = { "0-60°", "60-120°", "120-180°" };
+
+    // Добавляем заголовки для углов (сверху)
+    for (int col = 0; col < 3; ++col) {
+        int x = padding + col * (img_width + padding) + img_width / 2 - 30;
+        cv::putText(grid, angle_labels[col],
+            cv::Point(x, header_height / 2),
+            cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(255, 255, 255), 2);
+    }
+
+    // Добавляем заголовки для длины (слева)
+    for (int row = 0; row < 3; ++row) {
+        int y = header_height + padding + row * (img_height + padding) + img_height / 2;
+        cv::putText(grid, length_labels[row],
+            cv::Point(10, y),
+            cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(255, 255, 255), 2);
+    }
+
+    // Размещаем бины на сетке
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) {
+            int bin_index = row * 3 + col;
+
+            int x = padding + col * (img_width + padding);
+            int y = header_height + padding + row * (img_height + padding);
+
+            // Проверяем, что ROI не выходит за границы
+            if (x + img_width <= grid.cols && y + img_height <= grid.rows) {
+                cv::Rect roi(x, y, img_width, img_height);
+                bin_images[bin_index].copyTo(grid(roi));
+
+                // Рамка вокруг бина
+                cv::rectangle(grid, roi, cv::Scalar(200, 200, 200), 2);
+
+                // Количество ребер в бине
+                int edge_count = 0;
+                for (const auto& edge : edges) {
+                    float angle = edge.getAngle();
+                    float length = edge.getLength();
+                    float norm_length = (length - min_length) / (max_length - min_length) * 2.0f;
+                    int l_bin = static_cast<int>(norm_length);
+                    if (l_bin > 2) l_bin = 2;
+
+                    int a_bin = 0;
+                    if (angle < CV_PI / 3) a_bin = 0;
+                    else if (angle < 2 * CV_PI / 3) a_bin = 1;
+                    else a_bin = 2;
+
+                    if (l_bin == row && a_bin == col) edge_count++;
+                }
+
+                std::string count_text = "n=" + std::to_string(edge_count);
+                cv::putText(grid, count_text,
+                    cv::Point(x + img_width - 80, y + img_height - 20),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 0), 1);
+            }
+        }
+    }
+
+    cv::imwrite(filename, grid);
+    std::cout << "Bins visualization saved: " << filename << std::endl;
+}
+
+void visualizeBinDistribution(const std::vector<EBPTns::Edge>& edges,
+    const std::string& filename = "images/bin_distribution.png") {
+
+    if (edges.empty()) return;
+
+    float min_len = edges[0].getLength();
+    float max_len = edges[0].getLength();
+    for (const auto& e : edges) {
+        min_len = std::min(min_len, e.getLength());
+        max_len = std::max(max_len, e.getLength());
+    }
+
+    int bins[3][3] = { {0} };
+
+    for (const auto& edge : edges) {
+        float len = edge.getLength();
+        float angle = edge.getAngle();
+
+        int len_bin;
+        if (max_len - min_len < 0.1f) len_bin = 1;
+        else {
+            float norm = (len - min_len) / (max_len - min_len);
+            if (norm < 0.33f) len_bin = 0;
+            else if (norm < 0.66f) len_bin = 1;
+            else len_bin = 2;
+        }
+
+        int angle_bin;
+        if (angle < CV_PI / 3) angle_bin = 0;
+        else if (angle < 2 * CV_PI / 3) angle_bin = 1;
+        else angle_bin = 2;
+
+        bins[len_bin][angle_bin]++;
+    }
+
+    int cell_size = 100;
+    cv::Mat dist_viz = cv::Mat::zeros(cell_size * 4, cell_size * 4, CV_8UC3);
+    dist_viz.setTo(cv::Scalar(240, 240, 240));
+
+    std::vector<std::string> len_labels = { "Short", "Medium", "Long" };
+    std::vector<std::string> angle_labels = { "0-60°", "60-120°", "120-180°" };
+
+    // Рисуем таблицу
+    for (int i = 0; i <= 3; ++i) {
+        cv::line(dist_viz, cv::Point(i * cell_size, 0),
+            cv::Point(i * cell_size, cell_size * 3),
+            cv::Scalar(0, 0, 0), 2);
+        cv::line(dist_viz, cv::Point(0, i * cell_size),
+            cv::Point(cell_size * 3, i * cell_size),
+            cv::Scalar(0, 0, 0), 2);
+    }
+
+    // Заполняем ячейки
+    int total = edges.size();
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) {
+            int count = bins[row][col];
+            float percent = 100.0f * count / total;
+
+            cv::Rect cell(col * cell_size, row * cell_size, cell_size, cell_size);
+
+            int intensity = static_cast<int>(120 + 100 * percent / 50);
+            intensity = std::min(255, intensity);
+            cv::rectangle(dist_viz, cell, cv::Scalar(255 - intensity, 255, 255 - intensity), -1);
+
+            std::string text = std::to_string(count);
+            cv::putText(dist_viz, text,
+                cv::Point(col * cell_size + 20, row * cell_size + 40),
+                cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 0, 0), 2);
+
+            std::string percent_text = std::to_string(static_cast<int>(percent)) + "%";
+            cv::putText(dist_viz, percent_text,
+                cv::Point(col * cell_size + 20, row * cell_size + 70),
+                cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(80, 80, 80), 1);
+        }
+    }
+
+    for (int i = 0; i < 3; ++i) {
+        cv::putText(dist_viz, angle_labels[i],
+            cv::Point(i * cell_size + 20, cell_size * 3 + 25),
+            cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0), 1);
+        cv::putText(dist_viz, len_labels[i],
+            cv::Point(cell_size * 3 + 10, i * cell_size + 40),
+            cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0), 1);
+    }
+
+    cv::putText(dist_viz, "Angle →", cv::Point(cell_size, cell_size * 3 + 50),
+        cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 0), 1);
+    cv::putText(dist_viz, "Length ↓", cv::Point(cell_size * 3 + 20, cell_size),
+        cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 0), 1);
+
+    cv::imwrite(filename, dist_viz);
+    std::cout << "Распределение по бинам: " << filename << std::endl;
+
+    std::cout << "\nТаблица распределения ребер по бинам (длина × угол):" << std::endl;
+    std::cout << "=========================================" << std::endl;
+    std::cout << "          0-60°   60-120°  120-180°  Total" << std::endl;
+    std::cout << "-----------------------------------------" << std::endl;
+    for (int row = 0; row < 3; ++row) {
+        std::cout << len_labels[row] << "   ";
+        int row_total = 0;
+        for (int col = 0; col < 3; ++col) {
+            std::cout << "  " << bins[row][col] << "\t";
+            row_total += bins[row][col];
+        }
+        std::cout << "  " << row_total << std::endl;
+    }
+    std::cout << "-----------------------------------------" << std::endl;
+    std::cout << "Total: " << total << " ребер" << std::endl;
+}
+
 
 int main(int argc, char** argv) {
     setlocale(LC_ALL, "ru");
@@ -296,6 +554,26 @@ int main(int argc, char** argv) {
     //    std::cout << "  " << bin_start << "-" << bin_end << ": "
     //        << value << " пикселей" << std::endl;
     //}
+
+    /////////////////////////////
+    // Бины
+    /////////////////////////////
+
+    visualizeEdgeBins(input_image, result.edges, "images/edge_bins_structured.png");
+
+    visualizeBinDistribution(result.edges, "images/bin_distribution.png");
+
+    /////////////////////////////
+    // Суперпиксели
+    /////////////////////////////
+    auto result1 = analyzer.analyzeTextureWithSuperpixelsStructured(input_image, MODEL_PATH, 120, 10.0f);
+    cv::imwrite("images/superpixels_boundaries.png", result1.superpixel_visualization);
+
+    // Создаем композитное изображение: исходное + суперпиксели + ребра
+    cv::Mat composite = input_image.clone();
+    cv::addWeighted(composite, 0.7, result1.superpixel_visualization, 0.3, 0, composite);
+    cv::addWeighted(composite, 1.0, result1.edges_visualization, 0.5, 0, composite);
+    cv::imwrite("images/superpixels_with_edges.png", composite);
 
     //////////////////////////////////
     float scale = 1.0f;
