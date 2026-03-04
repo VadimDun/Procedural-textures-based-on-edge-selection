@@ -16,7 +16,7 @@ namespace EBPTns {
         rng_ = std::mt19937(rd());
     }
 
-    void EBPT::addEdgeGroup(const EdgeGroup& group) {
+    void EBPT::addEdgeGroup(const SourceGroupInfo& group) {
         edge_groups_.push_back(group);
     }
 
@@ -59,8 +59,8 @@ namespace EBPTns {
         }
         output = cv::Mat::zeros(height, width, input_image_.type());
         int processed_groups = 0;
-        for (const auto& group : edge_groups_) {
-            cv::Rect bbox = group.getBoundingBox();
+        for (const auto& srcGroup : edge_groups_) {
+            cv::Rect bbox = srcGroup.group.getBoundingBox();
             if (bbox.x < 0) bbox.x = 0;
             if (bbox.y < 0) bbox.y = 0;
             if (bbox.x + bbox.width > width) bbox.width = width - bbox.x;

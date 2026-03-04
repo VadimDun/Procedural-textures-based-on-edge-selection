@@ -4,11 +4,7 @@
 #include <opencv2/imgproc.hpp>
 
 namespace EBPTns {
-    struct SourceGroupInfo {
-        EdgeGroup group;
-        int superpixel_id;
-        cv::Mat superpixel_mask;
-    };
+
 
     struct PlacedGroup {
         EdgeGroup group;           // Трансформированная группа

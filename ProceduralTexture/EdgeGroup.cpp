@@ -9,6 +9,10 @@ namespace EBPTns {
         : edges_(edges) {
         calculateStatistics();
     }
+    EdgeGroup::EdgeGroup(const Edge& edge)
+        : edges_({ edge }) {
+        calculateStatistics();
+    }
 
     void EdgeGroup::calculateStatistics() {
         if (edges_.empty()) {

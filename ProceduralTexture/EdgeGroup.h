@@ -9,6 +9,7 @@ namespace EBPTns {
     class EdgeGroup {
     public:
         EdgeGroup() = default;
+        EdgeGroup(const Edge& edge);
         EdgeGroup(const std::vector<Edge>& edges);
 
         void calculateStatistics();

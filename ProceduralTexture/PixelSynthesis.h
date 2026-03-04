@@ -1,10 +1,11 @@
 #pragma once
 
 #include <opencv2/opencv.hpp>
-#include "EdgeGroup.h"
-#include "PlacedGroup.h" 
 #include <vector>
 #include <random>
+#include "EdgeGroup.h"
+#include "PlacedGroup.h" 
+#include "EBPT.h"
 
 namespace EBPTns {
 
@@ -12,11 +13,11 @@ namespace EBPTns {
     public:
         PixelSynthesis();
 
-        cv::Mat fillPixels(
-            const cv::Mat& input_image,
-            const std::vector<EdgeGroup>& source_groups,
-            const std::vector<PlacedGroup>& placed_groups,
-            int output_width, int output_height);
+        //cv::Mat fillPixels(
+        //    const cv::Mat& input_image,
+        //    const std::vector<EdgeGroup>& source_groups,
+        //    const std::vector<PlacedGroup>& placed_groups,
+        //    int output_width, int output_height);
 
         //cv::Mat PatchCopy(
         //    const cv::Mat& input_image,
