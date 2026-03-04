@@ -18,9 +18,18 @@ namespace EBPTns {
             const std::vector<PlacedGroup>& placed_groups,
             int output_width, int output_height);
 
+        //cv::Mat PatchCopy(
+        //    const cv::Mat& input_image,
+        //    const std::vector<EdgeGroup>& source_groups,
+        //    const std::vector<PlacedGroup>& placed_groups,
+        //    int output_width, int output_height);
+
+        cv::Mat copyWithMask(const cv::Mat& source, const cv::Mat& mask,
+            const cv::Rect& source_bbox, const cv::Rect& target_bbox);
+
         cv::Mat PatchCopy(
             const cv::Mat& input_image,
-            const std::vector<EdgeGroup>& source_groups,
+            const std::vector<SourceGroupInfo>& source_infos,
             const std::vector<PlacedGroup>& placed_groups,
             int output_width, int output_height);
 

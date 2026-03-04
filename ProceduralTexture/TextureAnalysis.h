@@ -19,6 +19,8 @@ namespace EBPTns {
         cv::Mat groups_visualization;
         cv::Mat edge_probability_map;        // Для Structured Forests (карта вероятностей)
         cv::Mat superpixel_visualization;  // Визуализация суперпикселей
+        cv::Mat superpixel_labels;            // Метки суперпикселей
+        std::vector<int> group_to_superpixel;
 
         AnalysisResult() = default;
 
@@ -53,10 +55,6 @@ namespace EBPTns {
 
         AnalysisResult analyzeTexture(const cv::Mat& input_image);
         AnalysisResult analyzeTextureStructured(const cv::Mat& input_image, const std::string& model_path = "model.yml");
-
-        AnalysisResult analyzeTextureWithSuperpixels(const cv::Mat& input_image,
-            int region_size = 30,
-            float ruler = 10.0f);
         AnalysisResult analyzeTextureWithSuperpixelsStructured(
             const cv::Mat& input_image,
             const std::string& model_path,
@@ -67,6 +65,7 @@ namespace EBPTns {
         void setMinEdgeLength(int min_length = 10);
         void setGroupingDistance(int distance = 30);
         void setSuperpixelParams(int region_size = 30, float ruler = 10.0f);
+        cv::Mat getSuperpixelMask(const cv::Mat& labels, int superpixel_id);
 
         std::vector<Edge> extractEdges(const cv::Mat& image);
         std::vector<Edge> extractEdgesStructured(const cv::Mat& image, cv::Mat edge_probability_map);

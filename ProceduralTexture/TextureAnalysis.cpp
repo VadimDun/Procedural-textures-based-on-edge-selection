@@ -403,7 +403,7 @@ namespace EBPTns {
                 region_size,
                 ruler);
 
-        slic->iterate(10);
+        slic->iterate(20);
 
         cv::Mat labels;
         slic->getLabels(labels);
@@ -564,35 +564,62 @@ namespace EBPTns {
         cv::Mat edge_probability_map;
         structured_edge_detector_->detectEdges(float_image, edge_probability_map);
 
-        // Получаем рёбра
         std::vector<Edge> edges = extractEdgesStructured(input_image, edge_probability_map);
         if (edges.empty()) {
             std::cerr << "Any edge didn't found" << std::endl;
             return empty_result;
         }
+        cv::Mat edges_visualization = visualizeEdges(input_image, edges);
 
         // Вычисляем суперпиксели
         cv::Mat superpixel_labels = computeSuperpixels(input_image, region_size, ruler);
         cv::Mat sp_visualization = visualizeSuperpixels(input_image, superpixel_labels);
 
-        std::unordered_map<int, std::vector<Edge>> sp_edge_map = assignEdgesToSuperpixels(edges, superpixel_labels);
+        // Привязываем ребра к суперпикселям
+        std::unordered_map<int, std::vector<Edge>> superpixel_edges;
 
-        cv::Mat edges_visualization = visualizeEdges(input_image, edges);
+        for (const auto& edge : edges) {
+            cv::Point2f center = edge.getCenter();
+            int x = static_cast<int>(center.x);
+            int y = static_cast<int>(center.y);
 
-        std::vector<EdgeGroup> temp_groups;
-
-        for (const auto& [sp_id, sp_edges] : sp_edge_map) {
-            if (sp_edges.size() >= 2)
-            {
-                EdgeGroup group(sp_edges);
-                temp_groups.push_back(group);
+            if (x >= 0 && x < superpixel_labels.cols && y >= 0 && y < superpixel_labels.rows) {
+                int sp_id = superpixel_labels.at<int>(y, x);
+                superpixel_edges[sp_id].push_back(edge);
             }
         }
+        std::cout << "Superpixels with edges: " << superpixel_edges.size() << std::endl;
 
-        std::cout << "   groups created: " << temp_groups.size() << std::endl;
-        cv::Mat groups_visualization = visualizeGroups(input_image, temp_groups);
+        std::vector<EdgeGroup> groups;
+        std::vector<int> group_to_superpixel;
 
-        // Создаем композитную визуализацию (суперпиксели + ребра)
+        for (const auto& [sp_id, sp_edges] : superpixel_edges) {
+            std::cout << "  Superpixel " << sp_id << " has " << sp_edges.size() << " edges" << std::endl;
+
+            EdgeGroup group(sp_edges);
+            groups.push_back(group);
+            group_to_superpixel.push_back(sp_id);
+            std::cout << "    -> Created group " << groups.size() - 1 << std::endl;
+        }
+
+        //for (const auto& edge : edges) {
+        //    cv::Point2f center = edge.getCenter();
+        //    int x = static_cast<int>(center.x);
+        //    int y = static_cast<int>(center.y);
+
+        //    if (x >= 0 && x < superpixel_labels.cols && y >= 0 && y < superpixel_labels.rows) {
+        //        int sp_id = superpixel_labels.at<int>(y, x);
+        //        if (std::find())
+        //        superpixel_edges[sp_id].push_back(edge);
+        //    }
+        //}
+
+        std::cout << "Groups created: " << groups.size() << std::endl;
+        std::cout << "group_to_superpixel size: " << group_to_superpixel.size() << std::endl;
+
+        cv::Mat groups_visualization = visualizeGroups(input_image, groups);
+
+        // Создаем композитную визуализацию
         cv::Mat composite = input_image.clone();
         cv::addWeighted(composite, 0.7, sp_visualization, 0.3, 0, composite);
         cv::addWeighted(composite, 1.0, edges_visualization, 0.5, 0, composite);
@@ -602,17 +629,35 @@ namespace EBPTns {
 
         // Создаем EBPT
         EBPT ebpt_model(input_image);
-        for (const auto& group : temp_groups) {
+        for (const auto& group : groups) {
             ebpt_model.addEdgeGroup(group);
         }
 
-        AnalysisResult result(ebpt_model, edges, temp_groups,
+        // Заполняем результат
+        AnalysisResult result(ebpt_model, edges, groups,
             edges_visualization, groups_visualization,
             edge_probability_map);
         result.superpixel_visualization = sp_visualization;
+        result.superpixel_labels = superpixel_labels;
+        result.group_to_superpixel = group_to_superpixel;
+
+        std::cout << "Final - groups: " << result.groups.size()
+            << ", mapping: " << result.group_to_superpixel.size() << std::endl;
 
         return result;
     }
 
+    cv::Mat TextureAnalysis::getSuperpixelMask(const cv::Mat& labels, int superpixel_id) {
+        cv::Mat mask = cv::Mat::zeros(labels.size(), CV_8UC1);
 
+        for (int y = 0; y < labels.rows; ++y) {
+            for (int x = 0; x < labels.cols; ++x) {
+                if (labels.at<int>(y, x) == superpixel_id) {
+                    mask.at<uchar>(y, x) = 255;
+                }
+            }
+        }
+
+        return mask;
+    }
 }

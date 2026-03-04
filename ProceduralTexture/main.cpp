@@ -103,7 +103,7 @@ static void visualizeChainCode(const EBPTns::Edge& edge, cv::Mat& image,
 
     }
 
-    std::cout << "  Angle: " << static_cast<int>(edge.getAngle() * 180 / CV_PI) << "°" << std::endl;
+    //std::cout << "  Angle: " << static_cast<int>(edge.getAngle() * 180 / CV_PI) << "°" << std::endl;
 }
 
 static void visualizeAllChainCodes(const std::vector<EBPTns::Edge>& edges,
@@ -173,7 +173,7 @@ static void visualizeAnglesOnly(const std::vector<EBPTns::Edge>& edges,
     cv::imwrite(filename, angle_viz);
 }
 
-void visualizeEdgeBins(const cv::Mat& input_image,
+static void visualizeEdgeBins(const cv::Mat& input_image,
     const std::vector<EBPTns::Edge>& edges,
     const std::string& filename = "images/edge_bins.png") {
 
@@ -320,7 +320,7 @@ void visualizeEdgeBins(const cv::Mat& input_image,
     std::cout << "Bins visualization saved: " << filename << std::endl;
 }
 
-void visualizeBinDistribution(const std::vector<EBPTns::Edge>& edges,
+static void visualizeBinDistribution(const std::vector<EBPTns::Edge>& edges,
     const std::string& filename = "images/bin_distribution.png") {
 
     if (edges.empty()) return;
@@ -490,18 +490,30 @@ int main(int argc, char** argv) {
     //EBPT ebpt_model = analyzer.analyzeTexture(input_image);
     //EBPT ebpt_model = analyzer.analyzeTextureStructured(input_image, MODEL_PATH);
 
-    AnalysisResult result;
     cv::Mat prob_map;
+    //AnalysisResult result;
 
-    if (isCanny) {
-        // Canny
-        result = analyzer.analyzeTexture(input_image);
-    }
-    else {
-        // Structured forests
-        result = analyzer.analyzeTextureStructured(input_image, MODEL_PATH);
-        prob_map = result.edge_probability_map;
-    }
+    //if (isCanny) {
+    //    // Canny
+    //    result = analyzer.analyzeTexture(input_image);
+    //}
+    //else {
+    //    // Structured forests
+    //    result = analyzer.analyzeTextureStructured(input_image, MODEL_PATH);
+    //    prob_map = result.edge_probability_map;
+    //}
+
+    /////////////////////////////
+// Суперпиксели
+/////////////////////////////
+    auto result = analyzer.analyzeTextureWithSuperpixelsStructured(input_image, MODEL_PATH, 120, 10.0f);
+    cv::imwrite("images/superpixels_boundaries.png", result.superpixel_visualization);
+
+    // Создаем композитное изображение: исходное + суперпиксели + ребра
+    cv::Mat composite = input_image.clone();
+    cv::addWeighted(composite, 0.7, result.superpixel_visualization, 0.3, 0, composite);
+    cv::addWeighted(composite, 1.0, result.edges_visualization, 0.5, 0, composite);
+    cv::imwrite("images/superpixels_with_edges.png", composite);
 
     EBPT ebpt_model = result.modelEBPT;
     std::vector<Edge> edges = result.edges;
@@ -559,23 +571,74 @@ int main(int argc, char** argv) {
     // Бины
     /////////////////////////////
 
-    visualizeEdgeBins(input_image, result.edges, "images/edge_bins_structured.png");
+    //visualizeEdgeBins(input_image, result.edges, "images/edge_bins_structured.png");
 
-    visualizeBinDistribution(result.edges, "images/bin_distribution.png");
-
-    /////////////////////////////
-    // Суперпиксели
-    /////////////////////////////
-    auto result1 = analyzer.analyzeTextureWithSuperpixelsStructured(input_image, MODEL_PATH, 120, 10.0f);
-    cv::imwrite("images/superpixels_boundaries.png", result1.superpixel_visualization);
-
-    // Создаем композитное изображение: исходное + суперпиксели + ребра
-    cv::Mat composite = input_image.clone();
-    cv::addWeighted(composite, 0.7, result1.superpixel_visualization, 0.3, 0, composite);
-    cv::addWeighted(composite, 1.0, result1.edges_visualization, 0.5, 0, composite);
-    cv::imwrite("images/superpixels_with_edges.png", composite);
+    //visualizeBinDistribution(result.edges, "images/bin_distribution.png");
 
     //////////////////////////////////
+
+    std::vector<SourceGroupInfo> source_infos;
+    for (size_t i = 0; i < result.groups.size(); ++i) {
+        SourceGroupInfo info;
+        info.group = result.groups[i];
+        info.superpixel_id = result.group_to_superpixel[i];
+        info.superpixel_mask = analyzer.getSuperpixelMask(
+            result.superpixel_labels,
+            info.superpixel_id
+        );
+        source_infos.push_back(info);
+    }
+
+    // В main.cpp после получения результата:
+
+    //std::cout << "Groups size: " << result.groups.size() << std::endl;
+    //std::cout << "group_to_superpixel size: " << result.group_to_superpixel.size() << std::endl;
+
+    //// Проверяем, что векторы не пусты и имеют одинаковый размер
+    //if (result.groups.empty() || result.group_to_superpixel.empty()) {
+    //    std::cerr << "Error: No groups or superpixel mapping found" << std::endl;
+    //    return -1;
+    //}
+
+    //if (result.groups.size() != result.group_to_superpixel.size()) {
+    //    std::cerr << "Error: Mismatch between groups and superpixel mapping" << std::endl;
+    //    std::cerr << "Groups: " << result.groups.size()
+    //        << ", Mapping: " << result.group_to_superpixel.size() << std::endl;
+    //    return -1;
+    //}
+
+    //// Проверяем superpixel_labels
+    //if (result.superpixel_labels.empty()) {
+    //    std::cerr << "Error: superpixel_labels is empty" << std::endl;
+    //    return -1;
+    //}
+
+    //std::cout << "superpixel_labels size: " << result.superpixel_labels.cols
+    //    << "x" << result.superpixel_labels.rows << std::endl;
+
+    //// Теперь создаем source_infos
+    //std::vector<SourceGroupInfo> source_infos;
+    //for (size_t i = 0; i < result.groups.size(); ++i) {
+    //    SourceGroupInfo info;
+    //    info.group = result.groups[i];
+    //    info.superpixel_id = result.group_to_superpixel[i];
+
+    //    std::cout << "Group " << i << " -> superpixel " << info.superpixel_id << std::endl;
+
+    //    info.superpixel_mask = analyzer.getSuperpixelMask(
+    //        result.superpixel_labels,
+    //        info.superpixel_id
+    //    );
+
+    //    if (info.superpixel_mask.empty()) {
+    //        std::cerr << "Warning: Empty mask for superpixel " << info.superpixel_id << std::endl;
+    //    }
+
+    //    source_infos.push_back(info);
+    //}
+
+    //std::cout << "Created " << source_infos.size() << " source infos" << std::endl;
+
     float scale = 1.0f;
     float density = 0.7f;
     float angle_spread = 0.3f;
@@ -613,13 +676,16 @@ int main(int argc, char** argv) {
     float synth_angle_variation = angle_spread * 1.2f;
     float synth_scale_variation = 0.25f;
 
+    //std::vector<PlacedGroup> placed_groups = synthesizer.synthesizePlacement(
+    //    source_groups,
+    //    output_width, output_height,
+    //    synth_density,
+    //    synth_angle_variation,
+    //    synth_scale_variation
+    //);
+
     std::vector<PlacedGroup> placed_groups = synthesizer.synthesizePlacement(
-        source_groups,
-        output_width, output_height,
-        synth_density,
-        synth_angle_variation,
-        synth_scale_variation
-    );
+        source_infos, output_width, output_height, density, synth_angle_variation, synth_scale_variation);
 
     // Визуализируем размещение
     cv::Mat placement_map = synthesizer.drawPlacementMap(
@@ -632,12 +698,15 @@ int main(int argc, char** argv) {
     pixel_synthesis.setRandomSeed(123);
     pixel_synthesis.setPatchSelectionMethod(1);
 
-    cv::Mat output_texture = pixel_synthesis.fillPixels(
-        input_image,
-        groups,
-        placed_groups,
-        output_width, output_height
-    );
+    //cv::Mat output_texture = pixel_synthesis.fillPixels(
+    //    input_image,
+    //    groups,
+    //    placed_groups,
+    //    output_width, output_height
+    //);
+    // Заполнение пикселей с масками
+    cv::Mat output_texture = pixel_synthesis.PatchCopy(
+        input_image, source_infos, placed_groups, output_width, output_height);
 
     cv::imwrite("images/output_texture.png", output_texture);
 
@@ -778,10 +847,10 @@ int main(int argc, char** argv) {
         case 'К':
         case 'r':
         case 'R':
-            placed_groups = synthesizer.synthesizePlacement(
-                source_groups, output_width, output_height,
-                synth_density, synth_angle_variation, synth_scale_variation
-            );
+            //placed_groups = synthesizer.synthesizePlacement(
+            //    source_groups, output_width, output_height,
+            //    synth_density, synth_angle_variation, synth_scale_variation
+            //);
             placement_map = synthesizer.drawPlacementMap(
                 placed_groups, output_width, output_height
             );

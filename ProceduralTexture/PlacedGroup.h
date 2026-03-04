@@ -4,19 +4,25 @@
 #include <opencv2/imgproc.hpp>
 
 namespace EBPTns {
+    struct SourceGroupInfo {
+        EdgeGroup group;
+        int superpixel_id;
+        cv::Mat superpixel_mask;
+    };
 
     struct PlacedGroup {
         EdgeGroup group;           // Трансформированная группа
         int source_index;          // Индекс в исходном массиве групп
+        int superpixel_id;
         float scale_factor;     
         float rotation_angle;   
         cv::Point2f translation;
 
         PlacedGroup() : source_index(-1), scale_factor(1.0f), rotation_angle(0.0f) {}
 
-        PlacedGroup(const EdgeGroup& g, int idx, float scale = 1.0f,
+        PlacedGroup(const EdgeGroup& g, int idx, int sp_id, float scale = 1.0f,
             float angle = 0.0f, const cv::Point2f& trans = cv::Point2f(0, 0))
-            : group(g), source_index(idx), scale_factor(scale),
+            : group(g), source_index(idx), superpixel_id(sp_id), scale_factor(scale),
             rotation_angle(angle), translation(trans) {
         }
 

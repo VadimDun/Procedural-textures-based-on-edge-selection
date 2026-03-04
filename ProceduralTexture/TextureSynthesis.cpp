@@ -68,65 +68,81 @@ namespace EBPTns {
         return distance < (combined_radius + min_distance);
     }
 
-    PlacedGroup TextureSynthesis::transformGroup(const EdgeGroup& source_group,
+    PlacedGroup TextureSynthesis::transformGroup(const SourceGroupInfo& source_info,
         int source_idx,
         const cv::Point2f& position,
         float angle, float scale) {
-        EdgeGroup transformed_group = source_group;
+
+        EdgeGroup transformed_group = source_info.group;
+
+        // Центрируем группу
         cv::Point2f original_center = transformed_group.getCenter();
         cv::Point2f center_offset = cv::Point2f(-original_center.x, -original_center.y);
         transformed_group.translate(center_offset);
+
+        // Применяем трансформации
         if (std::abs(scale - 1.0f) > 0.01f) {
             transformed_group.scale(scale);
         }
-        //if (std::abs(angle) > 0.01f) {
-        //    transformed_group.rotate(angle);
-        //}
-        cv::Point2f final_position = position - original_center;
-        transformed_group.translate(final_position);
+
+        if (std::abs(angle) > 0.01f) {
+            transformed_group.rotate(angle);
+        }
+
+        // Перемещаем в целевую позицию
+        transformed_group.translate(position);
+
+        // Вычисляем полное смещение
         cv::Point2f translation = position - original_center;
-        return PlacedGroup(transformed_group, source_idx, scale, angle, translation);
+
+        // Создаем PlacedGroup с superpixel_id
+        return PlacedGroup(transformed_group, source_idx, source_info.superpixel_id,
+            scale, angle, translation);
     }
 
     std::vector<PlacedGroup> TextureSynthesis::synthesizePlacement(
-        const std::vector<EdgeGroup>& source_groups,
+        const std::vector<SourceGroupInfo>& source_groups,
         int output_width, int output_height,
         float density,
         float angle_variation,
         float scale_variation) {
 
         std::vector<PlacedGroup> placed_groups;
+
         if (source_groups.empty() || output_width <= 0 || output_height <= 0) {
+            std::cerr << "Error: empty source groups or invalid output size" << std::endl;
             return placed_groups;
         }
 
-        float area_ratio = static_cast<float>(output_width * output_height) /
-            (512.0f * 512.0f);
-        int target_count = static_cast<int>(
-            source_groups.size() * density * area_ratio * 2.0f
-            );
-      
-        target_count = std::max(3, std::min(target_count, 50));
-        std::uniform_int_distribution<int> group_dist(0,
-            static_cast<int>(source_groups.size()) - 1);
-        std::vector<int> usage_count(source_groups.size(), 0);
+        std::cout << "Synthesizing placement with " << source_groups.size() << " source groups" << std::endl;
 
+        // Рассчитываем количество групп для размещения
+        float area_ratio = static_cast<float>(output_width * output_height) / (512.0f * 512.0f);
+        int target_count = static_cast<int>(source_groups.size() * density * area_ratio * 2.0f);
+        target_count = std::max(3, std::min(target_count, 50));
+
+        std::cout << "Target groups: " << target_count << std::endl;
+
+        // Распределение для выбора исходных групп
+        std::uniform_int_distribution<int> group_dist(0, static_cast<int>(source_groups.size()) - 1);
+
+        std::vector<int> usage_count(source_groups.size(), 0);
         int placed_count = 0;
         int overlap_count = 0;
         int max_attempts = 1000;
+
         while (placed_count < target_count && max_attempts > 0) {
             max_attempts--;
+
             int source_idx = group_dist(rng_);
+            const SourceGroupInfo& source_info = source_groups[source_idx];
 
-            const EdgeGroup& source_group = source_groups[source_idx];
             cv::Point2f position = generateRandomPosition(output_width, output_height);
-
-            float base_angle = source_group.getAverageAngle();
-            float angle = generateRandomAngle(base_angle, angle_variation);
+            float angle = generateRandomAngle(source_info.group.getAverageAngle(), angle_variation);
             float scale = generateRandomScale(1.0f, scale_variation);
 
-            PlacedGroup placed_group = transformGroup(source_group, source_idx,
-                position, angle, scale);
+            PlacedGroup placed_group = transformGroup(source_info, source_idx, position, angle, scale);
+
             if (avoid_overlap_ && placed_count > 0) {
                 bool has_overlap = false;
                 for (const auto& existing : placed_groups) {
@@ -135,32 +151,37 @@ namespace EBPTns {
                         break;
                     }
                 }
+
                 if (has_overlap) {
                     overlap_count++;
                     continue;
                 }
             }
+
             placed_groups.push_back(placed_group);
             usage_count[source_idx]++;
             placed_count++;
         }
+
+        std::cout << "Placed groups: " << placed_groups.size() << " (overlaps skipped: " << overlap_count << ")" << std::endl;
+
         return placed_groups;
     }
 
-    std::vector<PlacedGroup> TextureSynthesis::synthesizeFromEBPT(
-        const EBPT& ebpt_model,
-        int output_width, int output_height) {
+    //std::vector<PlacedGroup> TextureSynthesis::synthesizeFromEBPT(
+    //    const EBPT& ebpt_model,
+    //    int output_width, int output_height) {
 
-        if (ebpt_model.getNumGroups() == 0) {
-            return {};
-        }
-        const auto& source_groups = ebpt_model.getEdgeGroups();
-        float density = 0.7f;
-        float angle_variation = 0.3f;
-        float scale_variation = 0.2f;
-        return synthesizePlacement(source_groups, output_width, output_height,
-            density, angle_variation, scale_variation);
-    }
+    //    if (ebpt_model.getNumGroups() == 0) {
+    //        return {};
+    //    }
+    //    const auto& source_groups = ebpt_model.getEdgeGroups();
+    //    float density = 0.7f;
+    //    float angle_variation = 0.3f;
+    //    float scale_variation = 0.2f;
+    //    return synthesizePlacement(source_groups, output_width, output_height,
+    //        density, angle_variation, scale_variation);
+    //}
 
     cv::Mat TextureSynthesis::drawPlacementMap(
         const std::vector<PlacedGroup>& placed_groups,
