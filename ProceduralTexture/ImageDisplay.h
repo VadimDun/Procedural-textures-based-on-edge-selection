@@ -34,7 +34,7 @@ public:
         bool show_angle = true);
 
     static void visualizeAllChainCodes(const std::vector<EBPTns::Edge>& edges,
-        cv::Mat& image,
+        const cv::Mat& image,
         const std::string& filename = "images/chain_code_viz.png");
 
     static void visualizeAnglesOnly(const std::vector<EBPTns::Edge>& edges,

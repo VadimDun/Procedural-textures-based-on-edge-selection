@@ -13,39 +13,21 @@ namespace EBPTns {
 
     struct AnalysisResult {
         EBPT modelEBPT;
-        std::vector<Edge> edges;             // Обнаруженные ребра
-        cv::Mat edge_probability_map;        // Для Structured Forests (карта вероятностей)
         cv::Mat superpixel_labels;            // Метки суперпикселей
 
         AnalysisResult() = default;
 
-        // Конструктор для Canny
-        AnalysisResult(const EBPT& m,
-            const std::vector<Edge>& e,
-            const cv::Mat& ev,
-            const cv::Mat& gv)
-            : modelEBPT(m), edges(e){
+        AnalysisResult(const EBPT& m, const cv::Mat& labels)
+            : modelEBPT(m), superpixel_labels(labels){
         }
 
-        // Конструктор для Structured Forests (с картой вероятностей)
-        AnalysisResult(const EBPT& m,
-            const std::vector<Edge>& e,
-            const cv::Mat& ev,
-            const cv::Mat& gv,
-            const cv::Mat& prob)
-            : modelEBPT(m), edges(e),
-            edge_probability_map(prob) {
-        }
-
-        bool isValid() const { return !edges.empty() && !modelEBPT.getEdgeGroups().empty(); }
+        bool isValid() const { return !modelEBPT.getEdgeGroups().empty() && !superpixel_labels.empty(); }
     };
 
     class TextureAnalysis {
     public:
         TextureAnalysis();
 
-        //AnalysisResult analyzeTexture(const cv::Mat& input_image);
-        //AnalysisResult analyzeTextureStructured(const cv::Mat& input_image, const std::string& model_path = "model.yml");
         AnalysisResult analyzeTextureWithSuperpixelsStructured(
             const cv::Mat& input_image,
             const std::string& model_path,
@@ -55,12 +37,12 @@ namespace EBPTns {
         void setCannyThresholds(double low = 50, double high = 150);
         void setMinEdgeLength(int min_length = 10);
         void setGroupingDistance(int distance = 30);
+
         void setSuperpixelParams(int region_size = 30, float ruler = 10.0f);
         cv::Mat getSuperpixelMask(const cv::Mat& labels, int superpixel_id);
 
         std::vector<Edge> extractEdges(const cv::Mat& image);
         std::vector<Edge> extractEdgesStructured(const cv::Mat& image, cv::Mat edge_probability_map);
-        std::vector<EdgeGroup> groupEdges(const std::vector<Edge>& edges);
 
         cv::Mat computeSuperpixels(const cv::Mat& image, int region_size, float ruler);
         std::unordered_map<int, std::vector<Edge>> assignEdgesToSuperpixels(const std::vector<Edge>& edges, const cv::Mat& labels);

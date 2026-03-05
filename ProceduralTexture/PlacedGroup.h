@@ -14,7 +14,7 @@ namespace EBPTns {
         float rotation_angle;   
         cv::Point2f translation;
 
-        PlacedGroup() : source_index(-1), scale_factor(1.0f), rotation_angle(0.0f) {}
+        PlacedGroup() : source_index(-1), scale_factor(1.0f), rotation_angle(0.0f), superpixel_id(-1) {}
 
         PlacedGroup(const EdgeGroup& g, int idx, int sp_id, float scale = 1.0f,
             float angle = 0.0f, const cv::Point2f& trans = cv::Point2f(0, 0))

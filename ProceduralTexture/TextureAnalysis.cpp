@@ -99,80 +99,6 @@ namespace EBPTns {
         return edges;
     }
 
-    //AnalysisResult TextureAnalysis::analyzeTextureStructured(
-    //    const cv::Mat& input_image,
-    //    const std::string& model_path) {
-
-    //    std::cout << "Picture size: " << input_image.cols << "x" << input_image.rows << std::endl;
-
-    //    AnalysisResult empty_result;
-
-    //    if (!initializeStructuredDetector(model_path)) {
-    //        std::cerr << "TextureAnalysis::analyzeTextureStructured: StructuredForests didn't created" << std::endl;
-    //        return empty_result;
-    //    }
-
-    //    // Конвертируем в float и нормализуем
-    //    cv::Mat float_image;
-    //    if (input_image.channels() == 3) {
-    //        cv::cvtColor(input_image, float_image, cv::COLOR_BGR2RGB); // Модель обучена на RGB
-    //    }
-    //    else {
-    //        cv::cvtColor(input_image, float_image, cv::COLOR_GRAY2RGB); // Если grayscale, делаем 3 канала
-    //    }
-    //    float_image.convertTo(float_image, CV_32FC3, 1.0 / 255.0);
-
-    //    cv::Mat edge_probability_map;
-    //    structured_edge_detector_->detectEdges(float_image, edge_probability_map);
-
-    //    // Получаем рёбра
-    //    std::vector<Edge> edges = extractEdgesStructured(input_image, edge_probability_map);
-    //    if (edges.empty()) {
-    //        std::cerr << "Any edge didn't found" << std::endl;
-    //        return empty_result;
-    //    }
-
-    //    std::vector<EdgeGroup> groups = groupEdges(edges);
-    //    if (groups.empty()) {
-    //        std::cerr << "Any group didn't created" << std::endl;
-    //        return empty_result;
-    //    }
-
-    //    // Создаем EBPT
-    //    EBPT ebpt_model(input_image);
-    //    for (const auto& group : groups) {
-    //        ebpt_model.addEdgeGroup(group);
-    //    }
-
-    //    // Создаем визуализации для отладки. Todo потом может удалить
-    //    cv::Mat edges_visualization = visualizeEdges(input_image, edges);
-    //    cv::Mat groups_visualization = visualizeGroups(input_image, groups);
-
-    //    std::cout << "   Edges found: " << edges.size() << std::endl;
-    //    std::cout << "   Groups created: " << groups.size() << std::endl;
-
-    //    return AnalysisResult(ebpt_model, edges, groups,
-    //        edges_visualization, groups_visualization,
-    //        edge_probability_map);
-    //}
-
-    //AnalysisResult TextureAnalysis::analyzeTexture(const cv::Mat& input_image) {
-    //    AnalysisResult result;
-
-    //    result.edges = extractEdges(input_image);
-    //    result.edges_visualization = visualizeEdges(input_image, result.edges);
-
-    //    result.groups = groupEdges(result.edges);
-    //    result.groups_visualization = visualizeGroups(input_image, result.groups);
-
-    //    result.modelEBPT = EBPT(input_image);
-    //    for (const auto& group : result.groups) {
-    //        result.modelEBPT.addEdgeGroup(group);
-    //    }
-
-    //    return result;
-    //}
-
     std::vector<Edge> TextureAnalysis::extractEdges(const cv::Mat& image) {
         std::vector<Edge> edges;
         if (image.empty()) {
@@ -256,52 +182,6 @@ namespace EBPTns {
         }
         return true;
     }
-
-    std::vector<EdgeGroup> TextureAnalysis::groupEdges(const std::vector<Edge>& edges) {
-        std::vector<EdgeGroup> groups;
-        if (edges.empty()) {
-            return groups;
-        }
-        std::vector<bool> assigned(edges.size(), false);
-        for (size_t i = 0; i < edges.size(); ++i) {
-            if (assigned[i]) continue;
-            std::vector<Edge> group_edges;
-            group_edges.push_back(edges[i]);
-            assigned[i] = true;
-            bool found_more;
-            do {
-                found_more = false;
-                for (size_t j = i + 1; j < edges.size(); ++j) {
-                    if (assigned[j]) continue;
-                    bool fits_to_group = false;
-                    for (const auto& group_edge : group_edges) {
-                        if (shouldGroup(group_edge, edges[j])) {
-                            fits_to_group = true;
-                            break;
-                        }
-                    }
-                    if (fits_to_group) {
-                        group_edges.push_back(edges[j]);
-                        assigned[j] = true;
-                        found_more = true;
-                    }
-                }
-            } while (found_more);
-            if (group_edges.size() >= 1) {
-                EdgeGroup group(group_edges);
-                groups.push_back(group);
-            }
-        }
-        std::sort(groups.begin(), groups.end(),
-            [](const EdgeGroup& a, const EdgeGroup& b) {
-                return a.getRadialSpread() > b.getRadialSpread();
-            });
-        return groups;
-    }
-
-    
-
-
 
     /////////////////////////////
     // Суперпиксели
@@ -400,11 +280,9 @@ namespace EBPTns {
 
         std::cout << "Picture size: " << input_image.cols << "x" << input_image.rows << std::endl;
 
-        AnalysisResult empty_result;
-
         if (!initializeStructuredDetector(model_path)) {
             std::cerr << "TextureAnalysis::analyzeTextureStructured: StructuredForests didn't created" << std::endl;
-            return empty_result;
+            return AnalysisResult();
         }
 
         // Конвертируем в float и нормализуем
@@ -417,22 +295,32 @@ namespace EBPTns {
         }
         float_image.convertTo(float_image, CV_32FC3, 1.0 / 255.0);
 
+        // Probability_map
         cv::Mat edge_probability_map;
         structured_edge_detector_->detectEdges(float_image, edge_probability_map);
 
+        cv::Mat prob_map_display = edge_probability_map;
+        prob_map_display.convertTo(prob_map_display, CV_8UC1, 255);
+        ImageDisplay::saveAndShow("probability_map.png", "probability", prob_map_display);
+
+        // Edges
         std::vector<Edge> edges = extractEdgesStructured(input_image, edge_probability_map);
         if (edges.empty()) {
             std::cerr << "Any edge didn't found" << std::endl;
-            return empty_result;
+            return AnalysisResult();
         }
         cv::Mat edges_visualization = ImageDisplay::visualizeEdges(input_image, edges);
         ImageDisplay::setPartFinalVisualization(edges_visualization, ImageDisplay::edges);
+
+        ImageDisplay::visualizeAllChainCodes(edges, input_image, "images/chain_code_debug.png");
+        //ImageDisplay::visualizeAnglesOnly(edges, input_image, "images/angles_directions.png");
 
         // Вычисляем суперпиксели
         cv::Mat superpixel_labels = computeSuperpixels(input_image, region_size, ruler);
         cv::Mat sp_visualization = ImageDisplay::visualizeSuperpixels(input_image, superpixel_labels);
         ImageDisplay::saveAndShow("superpixels_boundaries.png", "Superpixels", sp_visualization);
 
+        // Groups
         std::vector<SourceGroupInfo> source_infos;
         for (const auto& edge : edges) {
             cv::Point2f center = edge.getCenter();
@@ -471,21 +359,14 @@ namespace EBPTns {
         // Создаем композитное изображение: исходное + суперпиксели + ребра
         //ImageDisplay::visualiseSPWithEdges(input_image, sp_visualization, edges_visualization);
 
-        cv::Mat prob_display;
-        edge_probability_map.convertTo(prob_display, CV_8UC1, 255);
-
-        // Создаем EBPT
         EBPT ebpt_model(input_image);
         for (const auto& group : source_infos) {
             ebpt_model.addEdgeGroup(group);
         }
 
-        // Заполняем результат
-        AnalysisResult result(ebpt_model, edges,
-            edges_visualization, groups_visualization,
-            edge_probability_map);
-        result.superpixel_labels = superpixel_labels;
+        AnalysisResult result(ebpt_model, superpixel_labels);
 
+        //return AnalysisResult(ebpt_model, superpixel_labels);
         return result;
     }
 

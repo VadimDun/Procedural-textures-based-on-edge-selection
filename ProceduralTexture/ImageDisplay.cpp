@@ -42,13 +42,13 @@ void ImageDisplay::setPartFinalVisualization(const cv::Mat& mat, PartFinalVis pa
         toCopy = cv::Rect(450, 50, 350, 350);
         point = cv::Point(460, 40);
         text = "Detected Edges";
-        path = "input_texture.png";
+        path = "edges.png";
         break;
     case PartFinalVis::groups:
         toCopy = cv::Rect(50, 450, 350, 350);
         point = cv::Point(60, 440);
         text = "Edge Groups";
-        path = "input_texture.png";
+        path = "groups.png";
         break;
     case PartFinalVis::output:
         toCopy = cv::Rect(450, 450, 350, 350);
@@ -328,7 +328,7 @@ void ImageDisplay::visualizeChainCode(const Edge& edge, cv::Mat& image,
         cv::arrowedLine(image, start_point, end_point,
             cv::Scalar(0, 255, 255), 2, cv::LINE_AA, 0, 0.3);
 
-        std::string angle_text = std::to_string(static_cast<int>(angle * 180 / CV_PI)) + "°";
+        std::string angle_text = std::to_string(static_cast<int>(angle * 180 / CV_PI));
         cv::putText(image, angle_text,
             cv::Point(static_cast<int>(center.x + 10), static_cast<int>(center.y - 10)),
             cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
@@ -339,7 +339,7 @@ void ImageDisplay::visualizeChainCode(const Edge& edge, cv::Mat& image,
 }
 
 void ImageDisplay::visualizeAllChainCodes(const std::vector<EBPTns::Edge>& edges,
-    cv::Mat& image,
+    const cv::Mat& image,
     const std::string& filename) {
     cv::Mat viz_image = image.clone();
 
