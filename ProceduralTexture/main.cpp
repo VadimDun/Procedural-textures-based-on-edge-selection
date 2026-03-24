@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
         analyzer.setGroupingDistance(60);
     }
 
-    auto result = analyzer.analyzeTextureWithSuperpixelsStructured(input_image, MODEL_PATH, 120, 10.0f);
+    auto result = analyzer.analyzeTextureWithSuperpixelsStructured(input_image, MODEL_PATH, 80, 10.0f);
     if (!result.isValid()) { return 1; }
 
     EBPT ebpt_model = result.modelEBPT;

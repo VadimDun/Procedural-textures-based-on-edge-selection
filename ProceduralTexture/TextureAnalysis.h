@@ -66,5 +66,7 @@ namespace EBPTns {
         std::vector<std::vector<cv::Point>> findContours(const cv::Mat& edges_image);
         std::vector<cv::Point> simplifyContour(const std::vector<cv::Point>& contour);
         bool shouldGroup(const Edge& edge1, const Edge& edge2) const;
+
+        cv::Mat getMask(const EdgeGroup& group, const cv::Size& image_size);
     };
 }

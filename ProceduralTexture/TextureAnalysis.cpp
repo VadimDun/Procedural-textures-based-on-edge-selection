@@ -335,7 +335,6 @@ namespace EBPTns {
                     SourceGroupInfo info;
                     info.group = EdgeGroup(edge);
                     info.superpixel_id = sp_id;
-                    info.superpixel_mask = getSuperpixelMask(superpixel_labels, sp_id);
                     source_infos.push_back(info);
                 }
                 else {
@@ -360,7 +359,10 @@ namespace EBPTns {
         //ImageDisplay::visualiseSPWithEdges(input_image, sp_visualization, edges_visualization);
 
         EBPT ebpt_model(input_image);
-        for (const auto& group : source_infos) {
+        cv::Size size = input_image.size();
+        for (auto& group : source_infos) {
+            //group.superpixel_mask = getSuperpixelMask(superpixel_labels, group.superpixel_id);
+            group.superpixel_mask = getMask(group.group, size);
             ebpt_model.addEdgeGroup(group);
         }
 
@@ -371,12 +373,63 @@ namespace EBPTns {
     }
 
     cv::Mat TextureAnalysis::getSuperpixelMask(const cv::Mat& labels, int superpixel_id) {
-        cv::Mat mask = cv::Mat::zeros(labels.size(), CV_8UC1);
+        // Находим все пиксели, принадлежащие суперпикселю
+        std::vector<cv::Point> points;
 
         for (int y = 0; y < labels.rows; ++y) {
             for (int x = 0; x < labels.cols; ++x) {
                 if (labels.at<int>(y, x) == superpixel_id) {
-                    mask.at<uchar>(y, x) = 255;
+                    points.push_back(cv::Point(x, y));
+                }
+            }
+        }
+
+        if (points.empty()) {
+            return cv::Mat::zeros(labels.size(), CV_8UC1);
+        }
+
+        // Вычисляем выпуклую оболочку
+        std::vector<cv::Point> hull;
+        cv::convexHull(points, hull);
+
+        // Создаем маску и заполняем выпуклую оболочку
+        cv::Mat mask = cv::Mat::zeros(labels.size(), CV_8UC1);
+
+        if (hull.size() >= 3) {
+            std::vector<std::vector<cv::Point>> hull_contour = { hull };
+            cv::fillPoly(mask, hull_contour, cv::Scalar(255));
+        }
+        else {
+            for (const auto& p : points) {
+                mask.at<uchar>(p.y, p.x) = 255;
+            }
+        }
+
+        return mask;
+    }
+
+    cv::Mat TextureAnalysis::getMask(const EdgeGroup& group, const cv::Size& image_size) {
+        std::vector<cv::Point> all_points = group.getAllPoints();
+
+        if (all_points.empty()) {
+            return cv::Mat::zeros(image_size, CV_8UC1);
+        }
+
+        // Вычисляем выпуклую оболочку
+        std::vector<cv::Point> hull;
+        cv::convexHull(all_points, hull);
+
+        // Создаем маску
+        cv::Mat mask = cv::Mat::zeros(image_size, CV_8UC1);
+
+        if (hull.size() >= 3) {
+            std::vector<std::vector<cv::Point>> hull_contour = { hull };
+            cv::fillPoly(mask, hull_contour, cv::Scalar(255));
+        }
+        else {
+            for (const auto& p : all_points) {
+                if (p.x >= 0 && p.x < image_size.width && p.y >= 0 && p.y < image_size.height) {
+                    mask.at<uchar>(p.y, p.x) = 255;
                 }
             }
         }
