@@ -7,6 +7,7 @@
 #include "Edge.h"
 #include "EdgeGroup.h"
 #include "EBPT.h"
+#include "PlacedGroup.h"
 
 using namespace EBPTns;
 static const std::string IMAGE_FOLDER = "images/";
@@ -41,6 +42,10 @@ public:
         const cv::Mat& background,
         const std::string& filename = "images/angles_only.png");
 
+    static cv::Mat drawPlacementMap(
+        const std::vector<PlacedGroup>& placed_groups,
+        const cv::Size& size);
+
     static void visualizeEdgeBins(const cv::Mat& input_image,
         const std::vector<EBPTns::Edge>& edges,
         const std::string& filename = "images/edge_bins.png");
@@ -49,6 +54,6 @@ public:
         const std::string& filename = "images/bin_distribution.png");
 
 private:
-
+    static void drawArrow(cv::Mat& img, const cv::Point& end, float angle, const cv::Scalar& color);
     static cv::Mat final_visualization;
 };

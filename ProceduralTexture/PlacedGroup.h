@@ -13,6 +13,8 @@ namespace EBPTns {
         float scale_factor;     
         float rotation_angle;   
         cv::Point2f translation;
+        std::vector<cv::Point> hull;
+        cv::Mat mask;
 
         PlacedGroup() : source_index(-1), scale_factor(1.0f), rotation_angle(0.0f), superpixel_id(-1) {}
 

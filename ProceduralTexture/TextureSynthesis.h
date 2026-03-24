@@ -14,32 +14,28 @@ namespace EBPTns {
 
     class TextureSynthesis {
     public:
-        TextureSynthesis();
+        TextureSynthesis(const cv::Size& size);
 
         std::vector<PlacedGroup> synthesizePlacement(
             const std::vector<SourceGroupInfo>& source_groups,
-            int output_width, int output_height,
             float density = 0.7f,
             float angle_variation = 0.3f,
             float scale_variation = 0.2f);
 
-        std::vector<PlacedGroup> synthesizeFromEBPT(
-            const EBPT& ebpt_model,
-            int output_width, int output_height);
+        //std::vector<PlacedGroup> synthesizeFromEBPT(
+        //    const EBPT& ebpt_model,
+        //    int output_width, int output_height);
 
         void setRandomSeed(unsigned int seed);
         void setAvoidOverlap(bool avoid) { avoid_overlap_ = avoid; }
         void setMinDistance(float distance) { min_distance_ = distance; }
-
-        cv::Mat drawPlacementMap(
-            const std::vector<PlacedGroup>& placed_groups,
-            int width, int height);
 
     private:
         std::mt19937 rng_;
 
         bool avoid_overlap_ = true;
         float min_distance_ = 30.0f;
+        cv::Size outputSize;
 
         cv::Point2f generateRandomPosition(int width, int height);
         float generateRandomAngle(float base_angle, float variation);

@@ -85,14 +85,23 @@ int main(int argc, char** argv) {
         analyzer.setCannyThresholds(50, 150);
         analyzer.setMinEdgeLength(15);
         analyzer.setGroupingDistance(20);
+
+        int regionSize = 120;
+        double threshold = 0.15;
+        analyzer.setSuperpixelParams(regionSize, 10.0f, threshold);
+
     }
     else {
         analyzer.setCannyThresholds(20, 60);
         analyzer.setMinEdgeLength(10);
         analyzer.setGroupingDistance(60);
+
+        int regionSize = 100;
+        double threshold = 0.25;
+        analyzer.setSuperpixelParams(regionSize, 10.0f, threshold);
     }
 
-    auto result = analyzer.analyzeTextureWithSuperpixelsStructured(input_image, MODEL_PATH, 80, 10.0f);
+    auto result = analyzer.analyzeTextureWithSuperpixelsStructured(input_image, MODEL_PATH);
     if (!result.isValid()) { return 1; }
 
     EBPT ebpt_model = result.modelEBPT;
@@ -149,32 +158,32 @@ int main(int argc, char** argv) {
     ebpt_model.setAngleSpread(angle_spread);
 
     // Синтез размещения
-    TextureSynthesis synthesizer;
+    cv::Size outSize;
+    if (use_real_texture) {
+        outSize.height = input_image.rows * 2;
+        outSize.width = input_image.cols * 2;
+    }
+    else {
+        outSize.width = 800;
+        outSize.height = 600;
+    }
+
+    TextureSynthesis synthesizer(outSize);
     synthesizer.setRandomSeed(42);
     synthesizer.setAvoidOverlap(true);
     synthesizer.setMinDistance(40.0f);
 
-    int output_width, output_height;
-    if (use_real_texture) {
-        output_width = input_image.cols * 2;
-        output_height = input_image.rows * 2;
-    }
-    else {
-        output_width = 800;
-        output_height = 600;
-    }
-
     float synth_density = density * 1.5f;
     float synth_angle_variation = angle_spread * 1.2f;
-    float synth_scale_variation = 0.25f;
+    float synth_scale_variation = 0.1f;
 
     const auto& source_groups = ebpt_model.getEdgeGroups();
     std::vector<PlacedGroup> placed_groups = synthesizer.synthesizePlacement(
-        source_groups, output_width, output_height, density, synth_angle_variation, synth_scale_variation);
+        source_groups, density, synth_angle_variation, synth_scale_variation);
 
     // Визуализируем размещение
-    cv::Mat placement_map = synthesizer.drawPlacementMap(
-        placed_groups, output_width, output_height
+    cv::Mat placement_map = ImageDisplay::drawPlacementMap(
+        placed_groups, outSize
     );
     ImageDisplay::setPartFinalVisualization(placement_map, ImageDisplay::placement);
 
@@ -184,7 +193,7 @@ int main(int argc, char** argv) {
 
     // Заполнение пикселей с масками
     cv::Mat output_texture = pixel_synthesis.fillPixels(
-        input_image, source_groups, placed_groups, output_width, output_height);
+        input_image, source_groups, placed_groups, outSize);
     ImageDisplay::setPartFinalVisualization(output_texture, ImageDisplay::output);
 
     bool running = true;
@@ -203,18 +212,17 @@ int main(int argc, char** argv) {
         case 'R':
             placed_groups = synthesizer.synthesizePlacement(
                 source_groups,
-                output_width, output_height,
                 density, synth_angle_variation, synth_scale_variation
             );
 
-            placement_map = synthesizer.drawPlacementMap(
-                placed_groups, output_width, output_height
+            placement_map = ImageDisplay::drawPlacementMap(
+                placed_groups, outSize
             );
             ImageDisplay::setPartFinalVisualization(placement_map, ImageDisplay::placement);
 
             output_texture = pixel_synthesis.fillPixels(
                 input_image, source_groups, placed_groups,
-                output_width, output_height
+                outSize
             );
             ImageDisplay::setPartFinalVisualization(output_texture, ImageDisplay::output);
 

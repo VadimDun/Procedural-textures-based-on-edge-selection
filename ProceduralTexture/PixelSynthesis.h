@@ -20,7 +20,7 @@ namespace EBPTns {
             const cv::Mat& input_image,
             const std::vector<SourceGroupInfo>& source_infos,
             const std::vector<PlacedGroup>& placed_groups,
-            int output_width, int output_height);
+            const cv::Size& size);
 
         void setRandomSeed(unsigned int seed);
 

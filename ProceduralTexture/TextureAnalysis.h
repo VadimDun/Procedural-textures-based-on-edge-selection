@@ -30,22 +30,21 @@ namespace EBPTns {
 
         AnalysisResult analyzeTextureWithSuperpixelsStructured(
             const cv::Mat& input_image,
-            const std::string& model_path,
-            int region_size = 30,
-            float ruler = 10.0f);
+            const std::string& model_path);
 
         void setCannyThresholds(double low = 50, double high = 150);
         void setMinEdgeLength(int min_length = 10);
         void setGroupingDistance(int distance = 30);
 
-        void setSuperpixelParams(int region_size = 30, float ruler = 10.0f);
-        cv::Mat getSuperpixelMask(const cv::Mat& labels, int superpixel_id);
+        void setSuperpixelParams(int region_size = 30, float ruler = 10.0f, double sp_Thresholds = 0.25);
 
         std::vector<Edge> extractEdges(const cv::Mat& image);
         std::vector<Edge> extractEdgesStructured(const cv::Mat& image, cv::Mat edge_probability_map);
 
-        cv::Mat computeSuperpixels(const cv::Mat& image, int region_size, float ruler);
+        cv::Mat computeSuperpixels(const cv::Mat& image);
         std::unordered_map<int, std::vector<Edge>> assignEdgesToSuperpixels(const std::vector<Edge>& edges, const cv::Mat& labels);
+
+        static cv::Mat getMask(const EdgeGroup& group, const cv::Size& image_size, std::vector<cv::Point>& hull);
 
     private:
         double canny_low_threshold_ = 50.0;
@@ -56,6 +55,7 @@ namespace EBPTns {
 
         int superpixel_region_size_ = 30;
         float superpixel_ruler_ = 10.0f;
+        double superpixel_threshold = 0.25;
 
         // Structured Forests
         cv::Ptr<cv::ximgproc::StructuredEdgeDetection> structured_edge_detector_;
@@ -67,6 +67,5 @@ namespace EBPTns {
         std::vector<cv::Point> simplifyContour(const std::vector<cv::Point>& contour);
         bool shouldGroup(const Edge& edge1, const Edge& edge2) const;
 
-        cv::Mat getMask(const EdgeGroup& group, const cv::Size& image_size);
     };
 }

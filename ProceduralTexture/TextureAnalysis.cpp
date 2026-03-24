@@ -65,8 +65,8 @@ namespace EBPTns {
 
         // Бинаризуем карту вероятностей (порог можно подобрать)
         cv::Mat binary_edges;
-        double threshold = 0.25; // todo сделать изменение порога в ручном формате в процессе работы программы, либо автоматический подбор
-        cv::threshold(edge_probability_map, binary_edges, threshold, 255, cv::THRESH_BINARY);
+        //double threshold = 0.25; // todo сделать изменение порога в ручном формате в процессе работы программы, либо автоматический подбор
+        cv::threshold(edge_probability_map, binary_edges, superpixel_threshold, 255, cv::THRESH_BINARY);
         binary_edges.convertTo(binary_edges, CV_8UC1);
 
         auto contours = findContours(binary_edges);
@@ -186,14 +186,15 @@ namespace EBPTns {
     /////////////////////////////
     // Суперпиксели
     /////////////////////////////
-    void TextureAnalysis::setSuperpixelParams(int region_size, float ruler) {
+    void TextureAnalysis::setSuperpixelParams(int region_size, float ruler, double sp_threshold) {
         superpixel_region_size_ = region_size;
         superpixel_ruler_ = ruler;
+        superpixel_threshold = sp_threshold;
         std::cout << "Параметры суперпикселей: region_size=" << region_size
-            << ", ruler=" << ruler << std::endl;
+            << ", ruler=" << ruler << ", threshold=" << sp_threshold << std::endl;
     }
 
-    cv::Mat TextureAnalysis::computeSuperpixels(const cv::Mat& image, int region_size, float ruler) {
+    cv::Mat TextureAnalysis::computeSuperpixels(const cv::Mat& image) {
 
         // Конвертируем в LAB цветовое пространство (лучше для суперпикселей)
         cv::Mat lab_image;
@@ -208,10 +209,10 @@ namespace EBPTns {
         cv::Ptr<cv::ximgproc::SuperpixelSLIC> slic =
             cv::ximgproc::createSuperpixelSLIC(lab_image,
                 cv::ximgproc::SLIC,
-                region_size,
-                ruler);
+                superpixel_region_size_,
+                superpixel_ruler_);
 
-        slic->iterate(20);
+        slic->iterate(5);
 
         cv::Mat labels;
         slic->getLabels(labels);
@@ -274,9 +275,7 @@ namespace EBPTns {
 
     AnalysisResult TextureAnalysis::analyzeTextureWithSuperpixelsStructured(
         const cv::Mat& input_image,
-        const std::string& model_path,
-        int region_size,
-        float ruler) {
+        const std::string& model_path) {
 
         std::cout << "Picture size: " << input_image.cols << "x" << input_image.rows << std::endl;
 
@@ -316,7 +315,7 @@ namespace EBPTns {
         //ImageDisplay::visualizeAnglesOnly(edges, input_image, "images/angles_directions.png");
 
         // Вычисляем суперпиксели
-        cv::Mat superpixel_labels = computeSuperpixels(input_image, region_size, ruler);
+        cv::Mat superpixel_labels = computeSuperpixels(input_image);
         cv::Mat sp_visualization = ImageDisplay::visualizeSuperpixels(input_image, superpixel_labels);
         ImageDisplay::saveAndShow("superpixels_boundaries.png", "Superpixels", sp_visualization);
 
@@ -352,19 +351,19 @@ namespace EBPTns {
 
         std::cout << "Groups created: " << source_infos.size() << std::endl;
 
-        cv::Mat groups_visualization = ImageDisplay::visualizeGroups(input_image, source_infos);
-        ImageDisplay::setPartFinalVisualization(groups_visualization, ImageDisplay::groups);
-
         // Создаем композитное изображение: исходное + суперпиксели + ребра
         //ImageDisplay::visualiseSPWithEdges(input_image, sp_visualization, edges_visualization);
 
         EBPT ebpt_model(input_image);
         cv::Size size = input_image.size();
+
         for (auto& group : source_infos) {
-            //group.superpixel_mask = getSuperpixelMask(superpixel_labels, group.superpixel_id);
-            group.superpixel_mask = getMask(group.group, size);
+            group.superpixel_mask = getMask(group.group, size, group.hull);
             ebpt_model.addEdgeGroup(group);
         }
+
+        cv::Mat groups_hull_visualization = ImageDisplay::visualizeGroups(input_image, source_infos);
+        ImageDisplay::setPartFinalVisualization(groups_hull_visualization, ImageDisplay::groups);
 
         AnalysisResult result(ebpt_model, superpixel_labels);
 
@@ -372,43 +371,8 @@ namespace EBPTns {
         return result;
     }
 
-    cv::Mat TextureAnalysis::getSuperpixelMask(const cv::Mat& labels, int superpixel_id) {
-        // Находим все пиксели, принадлежащие суперпикселю
-        std::vector<cv::Point> points;
 
-        for (int y = 0; y < labels.rows; ++y) {
-            for (int x = 0; x < labels.cols; ++x) {
-                if (labels.at<int>(y, x) == superpixel_id) {
-                    points.push_back(cv::Point(x, y));
-                }
-            }
-        }
-
-        if (points.empty()) {
-            return cv::Mat::zeros(labels.size(), CV_8UC1);
-        }
-
-        // Вычисляем выпуклую оболочку
-        std::vector<cv::Point> hull;
-        cv::convexHull(points, hull);
-
-        // Создаем маску и заполняем выпуклую оболочку
-        cv::Mat mask = cv::Mat::zeros(labels.size(), CV_8UC1);
-
-        if (hull.size() >= 3) {
-            std::vector<std::vector<cv::Point>> hull_contour = { hull };
-            cv::fillPoly(mask, hull_contour, cv::Scalar(255));
-        }
-        else {
-            for (const auto& p : points) {
-                mask.at<uchar>(p.y, p.x) = 255;
-            }
-        }
-
-        return mask;
-    }
-
-    cv::Mat TextureAnalysis::getMask(const EdgeGroup& group, const cv::Size& image_size) {
+    cv::Mat TextureAnalysis::getMask(const EdgeGroup& group, const cv::Size& image_size, std::vector<cv::Point>& hull) {
         std::vector<cv::Point> all_points = group.getAllPoints();
 
         if (all_points.empty()) {
@@ -416,7 +380,6 @@ namespace EBPTns {
         }
 
         // Вычисляем выпуклую оболочку
-        std::vector<cv::Point> hull;
         cv::convexHull(all_points, hull);
 
         // Создаем маску
