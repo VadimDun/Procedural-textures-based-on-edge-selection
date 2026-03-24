@@ -179,7 +179,11 @@ int main(int argc, char** argv) {
 
     const auto& source_groups = ebpt_model.getEdgeGroups();
     std::vector<PlacedGroup> placed_groups = synthesizer.synthesizePlacement(
-        source_groups, density, synth_angle_variation, synth_scale_variation);
+        input_image,
+        source_groups,
+        synth_density,
+        synth_angle_variation,
+        synth_scale_variation);
 
     // Визуализируем размещение
     cv::Mat placement_map = ImageDisplay::drawPlacementMap(
@@ -211,9 +215,11 @@ int main(int argc, char** argv) {
         case 'r':
         case 'R':
             placed_groups = synthesizer.synthesizePlacement(
+                input_image,
                 source_groups,
-                density, synth_angle_variation, synth_scale_variation
-            );
+                synth_density,
+                synth_angle_variation,
+                synth_scale_variation);
 
             placement_map = ImageDisplay::drawPlacementMap(
                 placed_groups, outSize

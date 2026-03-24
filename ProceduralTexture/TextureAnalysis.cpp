@@ -358,7 +358,7 @@ namespace EBPTns {
         cv::Size size = input_image.size();
 
         for (auto& group : source_infos) {
-            group.superpixel_mask = getMask(group.group, size, group.hull);
+            group.mask = getMask(group.group, size, group.hull);
             ebpt_model.addEdgeGroup(group);
         }
 

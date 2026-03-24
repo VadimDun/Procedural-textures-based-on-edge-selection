@@ -10,7 +10,7 @@ namespace EBPTns {
     struct SourceGroupInfo {
         EdgeGroup group;
         int superpixel_id;
-        cv::Mat superpixel_mask;
+        cv::Mat mask;
         std::vector<cv::Point> hull;
     };
 

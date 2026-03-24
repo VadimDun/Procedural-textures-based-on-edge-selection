@@ -59,142 +59,120 @@ namespace EBPTns {
         const std::vector<PlacedGroup>& placed_groups,
         const cv::Size& size) {
 
-        // Заполняем фон средним цветом
         cv::Scalar avg_color = cv::mean(input_image);
-        cv::Mat output = cv::Mat::zeros(size.width, size.width, input_image.type());
+        cv::Mat output = cv::Mat::zeros(size.height, size.width, input_image.type());
         output.setTo(avg_color);
 
-        for (const auto& placed : placed_groups) {
-            if (placed.source_index < 0 || placed.source_index >= source_infos.size()) {
+        for (size_t idx = 0; idx < placed_groups.size(); ++idx) {
+            const auto& placed = placed_groups[idx];
+
+            if (!placed.isValid() || placed.patch.empty()) {
                 continue;
             }
 
-            const auto& source_info = source_infos[placed.source_index];
+            // Вычисляем позицию левого верхнего угла патча
+            int patch_left = static_cast<int>(placed.position.x - placed.patch.cols / 2);
+            int patch_top = static_cast<int>(placed.position.y - placed.patch.rows / 2);
 
-            // Определяем bounding box для размещения
-            cv::Rect target_bbox;
-            if (!placed.hull.empty()) {
-                target_bbox = cv::boundingRect(placed.hull);
-            }
-            else {
-                target_bbox = placed.group.getBoundingBox();
-            }
+            // Вычисляем пересечение с выходным изображением
+            cv::Rect target_bbox(
+                std::max(0, patch_left),
+                std::max(0, patch_top),
+                placed.patch.cols,
+                placed.patch.rows
+            );
 
-            // Корректируем границы
-            if (target_bbox.x < 0) target_bbox.x = 0;
-            if (target_bbox.y < 0) target_bbox.y = 0;
-            if (target_bbox.x + target_bbox.width > size.width)
+            // Обрезаем по границам
+            if (target_bbox.x + target_bbox.width > size.width) {
                 target_bbox.width = size.width - target_bbox.x;
-            if (target_bbox.y + target_bbox.height > size.height)
+            }
+            if (target_bbox.y + target_bbox.height > size.height) {
                 target_bbox.height = size.height - target_bbox.y;
+            }
 
             if (target_bbox.width <= 0 || target_bbox.height <= 0) continue;
 
-            // Берем патч из исходного изображения
-            cv::Rect source_bbox = source_info.group.getBoundingBox();
+            // Вычисляем ROI в патче
+            int roi_x = target_bbox.x - patch_left;
+            int roi_y = target_bbox.y - patch_top;
 
-            cv::Mat patch = input_image(source_bbox).clone();
-
-            // Поворачиваем патч
-            cv::Mat rotated_patch;
-            if (std::abs(placed.rotation_angle) > 0.01f) {
-                // Центр поворота — центр исходного bounding box
-                cv::Point2f center(source_bbox.width / 2.0f, source_bbox.height / 2.0f);
-                cv::Mat rot_mat = cv::getRotationMatrix2D(
-                    center,
-                    placed.rotation_angle * 180.0 / CV_PI,
-                    placed.scale_factor
-                );
-                cv::warpAffine(patch, rotated_patch, rot_mat, patch.size());
-            }
-            else if (std::abs(placed.scale_factor - 1.0f) > 0.01f) {
-                // Только масштабирование без поворота
-                cv::resize(patch, rotated_patch, patch.size(),
-                    placed.scale_factor, placed.scale_factor);
-            }
-            else {
-                rotated_patch = patch;
+            if (roi_x < 0 || roi_y < 0 ||
+                roi_x + target_bbox.width > placed.patch.cols ||
+                roi_y + target_bbox.height > placed.patch.rows) {
+                continue;
             }
 
-            // Масштабируем патч до размера target_bbox если нужно
-            if (rotated_patch.cols != target_bbox.width || rotated_patch.rows != target_bbox.height) {
-                cv::resize(rotated_patch, rotated_patch, target_bbox.size());
-            }
+            cv::Rect patch_roi(roi_x, roi_y, target_bbox.width, target_bbox.height);
+            cv::Mat patch_part = placed.patch(patch_roi);
 
             // Получаем маску
-            cv::Mat mask_region;
-            if (!placed.mask.empty()) {
-                if (target_bbox.x >= 0 && target_bbox.y >= 0 &&
-                    target_bbox.x + target_bbox.width <= placed.mask.cols &&
-                    target_bbox.y + target_bbox.height <= placed.mask.rows) {
-                    mask_region = placed.mask(target_bbox).clone();
-                }
-                else {
-                    // Создаем маску из hull
-                    if (!placed.hull.empty()) {
-                        mask_region = cv::Mat::zeros(target_bbox.size(), CV_8UC1);
-                        std::vector<std::vector<cv::Point>> hull_contour;
-                        std::vector<cv::Point> shifted_hull = placed.hull;
-                        for (auto& p : shifted_hull) {
-                            p.x -= target_bbox.x;
-                            p.y -= target_bbox.y;
-                        }
-                        hull_contour.push_back(shifted_hull);
-                        cv::fillPoly(mask_region, hull_contour, cv::Scalar(255));
-                    }
-                    else {
-                        mask_region = cv::Mat::ones(target_bbox.size(), CV_8UC1) * 255;
-                    }
-                }
+            cv::Mat mask_part;
+            if (!placed.mask.empty() &&
+                placed.mask.cols == placed.patch.cols &&
+                placed.mask.rows == placed.patch.rows) {
+                mask_part = placed.mask(patch_roi);
             }
             else {
                 // Создаем маску из hull
+                mask_part = cv::Mat::zeros(patch_part.size(), CV_8UC1);
                 if (!placed.hull.empty()) {
-                    mask_region = cv::Mat::zeros(target_bbox.size(), CV_8UC1);
-                    std::vector<std::vector<cv::Point>> hull_contour;
-                    std::vector<cv::Point> shifted_hull = placed.hull;
-                    for (auto& p : shifted_hull) {
-                        p.x -= target_bbox.x;
-                        p.y -= target_bbox.y;
+                    std::vector<cv::Point> local_hull;
+                    for (const auto& p : placed.hull) {
+                        cv::Point local_p(
+                            p.x - target_bbox.x,
+                            p.y - target_bbox.y
+                        );
+                        if (local_p.x >= 0 && local_p.x < mask_part.cols &&
+                            local_p.y >= 0 && local_p.y < mask_part.rows) {
+                            local_hull.push_back(local_p);
+                        }
                     }
-                    hull_contour.push_back(shifted_hull);
-                    cv::fillPoly(mask_region, hull_contour, cv::Scalar(255));
+                    if (local_hull.size() >= 3) {
+                        std::vector<std::vector<cv::Point>> hull_contour = { local_hull };
+                        cv::fillPoly(mask_part, hull_contour, cv::Scalar(255));
+                    }
+                    else {
+                        mask_part = cv::Mat::ones(patch_part.size(), CV_8UC1) * 255;
+                    }
                 }
                 else {
-                    mask_region = cv::Mat::ones(target_bbox.size(), CV_8UC1) * 255;
+                    mask_part = cv::Mat::ones(patch_part.size(), CV_8UC1) * 255;
                 }
             }
 
-            // Масштабируем маску если нужно
-            if (mask_region.cols != target_bbox.width || mask_region.rows != target_bbox.height) {
-                cv::resize(mask_region, mask_region, target_bbox.size());
-            }
+            cv::Mat binary_mask;
+            cv::threshold(mask_part, binary_mask, 128, 255, cv::THRESH_BINARY);
 
-            // Центр для seamlessClone
-            cv::Point center(target_bbox.x + target_bbox.width / 2,
-                target_bbox.y + target_bbox.height / 2);
+            if (cv::countNonZero(binary_mask) == 0) continue;
 
-            // Применяем Poisson blending
-            cv::Mat result;
+            // Вычисляем локальный центр (центр группы относительно target_bbox)
+            cv::Point local_center(
+                static_cast<int>(placed.position.x - target_bbox.x),
+                static_cast<int>(placed.position.y - target_bbox.y)
+            );
 
-            bool use_seamless_clone = (rotated_patch.rows >= 10 && rotated_patch.cols >= 10);
+            local_center.x = std::max(0, std::min(local_center.x, target_bbox.width - 1));
+            local_center.y = std::max(0, std::min(local_center.y, target_bbox.height - 1));
 
-            if (use_seamless_clone) {
-                cv::seamlessClone(rotated_patch, output, mask_region, center, result, cv::NORMAL_CLONE);
-                output = result; // Обновляем output
-            }
-            else {
-                // Простое копирование для маленьких патчей
-                cv::Rect roi(center.x - rotated_patch.cols / 2, center.y - rotated_patch.rows / 2,
-                    rotated_patch.cols, rotated_patch.rows);
+            // Вставляем патч
+            bool use_seamless = (patch_part.rows >= 6 && patch_part.cols >= 6 &&
+                binary_mask.rows >= 6 && binary_mask.cols >= 6);
 
-                // Убедимся, что ROI в пределах изображения
-                roi = roi & cv::Rect(0, 0, output.cols, output.rows);
-
-                if (roi.width > 0 && roi.height > 0) {
-                    cv::Mat small_patch = rotated_patch(cv::Rect(0, 0, roi.width, roi.height));
-                    small_patch.copyTo(output(roi));
+            if (use_seamless) {
+                try {
+                    cv::Mat result;
+                    cv::Mat output_roi = output(target_bbox);
+                    cv::seamlessClone(patch_part, output_roi, binary_mask,
+                        local_center, result, cv::NORMAL_CLONE);
+                    result.copyTo(output(target_bbox));
                 }
+                catch (const cv::Exception& e) {
+                    patch_part.copyTo(output(target_bbox), binary_mask);
+                }
+            }
+            else 
+            {
+                patch_part.copyTo(output(target_bbox), binary_mask);
             }
         }
 

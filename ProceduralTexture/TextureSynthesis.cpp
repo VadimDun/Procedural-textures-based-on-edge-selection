@@ -70,44 +70,112 @@ namespace EBPTns {
         return distance < (combined_radius + min_distance);
     }
 
-    PlacedGroup TextureSynthesis::transformGroup(const SourceGroupInfo& source_info,
+    PlacedGroup TextureSynthesis::transformGroup(
+        const SourceGroupInfo& source_info,
+        const cv::Mat& input_image,
         int source_idx,
         const cv::Point2f& position,
         float angle, float scale) const {
 
-        EdgeGroup transformed_group = source_info.group;
+        // Получаем bounding box группы
+        cv::Rect source_bbox = source_info.group.getBoundingBox();
+        cv::Point2f group_center = source_info.group.getCenter();
 
-        // Сохраняем оригинальный центр
-        cv::Point2f original_center = transformed_group.getCenter();
+        // Вычисляем центр в локальных координатах bounding box
+        cv::Point2f local_center(
+            group_center.x - source_bbox.x,
+            group_center.y - source_bbox.y
+        );
 
-        // Центрируем группу
-        cv::Point2f center_offset = cv::Point2f(-original_center.x, -original_center.y);
-        transformed_group.translate(center_offset);
+        cv::Mat original_patch = input_image(source_bbox).clone();
 
-        // Применяем трансформации
-        if (std::abs(scale - 1.0f) > 0.01f) {
-            transformed_group.scale(scale);
+        cv::Mat original_mask;
+        if (!source_info.mask.empty()) {
+            original_mask = source_info.mask(source_bbox).clone();
+        }
+        else {
+            original_mask = cv::Mat::ones(source_bbox.size(), CV_8UC1) * 255;
         }
 
-        if (std::abs(angle) > 0.01f) {
-            transformed_group.rotate(angle);
+        cv::Mat rot_mat = cv::getRotationMatrix2D(local_center, -angle * 180.0 / CV_PI, scale);
+
+        // Вычисляем новый размер после поворота
+        cv::Rect bbox_rotated = cv::RotatedRect(local_center, original_patch.size(), -angle * 180.0 / CV_PI).boundingRect();
+
+        // Корректируем матрицу трансформации для сохранения всего содержимого
+        rot_mat.at<double>(0, 2) += (bbox_rotated.width / 2.0 - local_center.x);
+        rot_mat.at<double>(1, 2) += (bbox_rotated.height / 2.0 - local_center.y);
+
+        cv::Mat transformed_patch;
+        cv::warpAffine(original_patch, transformed_patch, rot_mat,
+            bbox_rotated.size(),
+            cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0));
+
+        cv::Mat transformed_mask;
+        cv::warpAffine(original_mask, transformed_mask, rot_mat,
+            bbox_rotated.size(),
+            cv::INTER_NEAREST, cv::BORDER_CONSTANT, cv::Scalar(0));
+
+        // Бинаризуем маску
+        cv::threshold(transformed_mask, transformed_mask, 128, 255, cv::THRESH_BINARY);
+
+        // Вычисляем новый центр в глобальных координатах
+        cv::Point2f new_center(
+            position.x,
+            position.y
+        );
+
+        // Вычисляем смещение для патча (верхний левый угол)
+        cv::Point2f patch_offset(
+            new_center.x - (bbox_rotated.width / 2.0),
+            new_center.y - (bbox_rotated.height / 2.0)
+        );
+
+        // Вычисляем hull в глобальных координатах
+        std::vector<cv::Point> transformed_hull;
+        if (!source_info.hull.empty()) {
+            transformed_hull.reserve(source_info.hull.size());
+
+            for (const auto& point : source_info.hull) {
+                cv::Point2f p(point.x, point.y);
+
+                // Переводим в локальные координаты относительно центра группы
+                p.x -= group_center.x;
+                p.y -= group_center.y;
+
+                p.x *= scale;
+                p.y *= scale;
+
+                float cos_a = std::cos(angle);
+                float sin_a = std::sin(angle);
+                float rotated_x = p.x * cos_a - p.y * sin_a;
+                float rotated_y = p.x * sin_a + p.y * cos_a;
+
+                rotated_x += new_center.x;
+                rotated_y += new_center.y;
+
+                transformed_hull.push_back(cv::Point(
+                    static_cast<int>(std::round(rotated_x)),
+                    static_cast<int>(std::round(rotated_y))
+                ));
+            }
         }
 
-        // Перемещаем в целевую позицию
-        transformed_group.translate(position);
-
-        // Вычисляем полное смещение
-        cv::Point2f translation = position - original_center;
-
-        PlacedGroup placed_group(transformed_group, source_idx,
-            scale, angle, translation);
-
-        placed_group.mask = TextureAnalysis::getMask(transformed_group, outputSize, placed_group.hull);
+        PlacedGroup placed_group(
+            transformed_patch,
+            transformed_mask,
+            transformed_hull,
+            new_center,
+            source_idx,
+            scale,
+            angle
+        );
 
         return placed_group;
     }
 
     std::vector<PlacedGroup> TextureSynthesis::synthesizePlacement(
+        const cv::Mat& input_image,
         const std::vector<SourceGroupInfo>& source_groups,
         float density,
         float angle_variation,
@@ -147,14 +215,22 @@ namespace EBPTns {
             float angle = generateRandomAngle(source_info.group.getAverageAngle(), angle_variation);
             float scale = generateRandomScale(1.0f, scale_variation);
 
-            PlacedGroup placed_group = transformGroup(source_info, source_idx, position, angle, scale);
+            PlacedGroup placed_group = transformGroup(
+                source_info, input_image, source_idx, position, angle, scale);
 
             if (avoid_overlap_ && placed_count > 0) {
                 bool has_overlap = false;
                 for (const auto& existing : placed_groups) {
-                    if (checkOverlap(placed_group.group, existing.group, min_distance_)) {
-                        has_overlap = true;
-                        break;
+                    if (!placed_group.hull.empty() && !existing.hull.empty()) {
+                        // TODO: добавить проверку пересечения hull
+                        float dx = placed_group.position.x - existing.position.x;
+                        float dy = placed_group.position.y - existing.position.y;
+                        float distance = std::sqrt(dx * dx + dy * dy);
+                        float min_dist = min_distance_ * (scale + existing.scale_factor) / 2.0f;
+                        if (distance < min_dist) {
+                            has_overlap = true;
+                            break;
+                        }
                     }
                 }
 
@@ -168,7 +244,8 @@ namespace EBPTns {
             placed_count++;
         }
 
-        std::cout << "Placed groups: " << placed_groups.size() << " (overlaps skipped: " << overlap_count << ")" << std::endl;
+        std::cout << "Placed groups: " << placed_groups.size()
+            << " (overlaps skipped: " << overlap_count << ")" << std::endl;
 
         return placed_groups;
     }

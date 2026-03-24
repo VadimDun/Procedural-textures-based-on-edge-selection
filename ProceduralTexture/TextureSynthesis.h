@@ -17,10 +17,11 @@ namespace EBPTns {
         TextureSynthesis(const cv::Size& size);
 
         std::vector<PlacedGroup> synthesizePlacement(
+            const cv::Mat& input_image,
             const std::vector<SourceGroupInfo>& source_groups,
-            float density = 0.7f,
-            float angle_variation = 0.3f,
-            float scale_variation = 0.2f);
+            float density,
+            float angle_variation,
+            float scale_variation);
 
         //std::vector<PlacedGroup> synthesizeFromEBPT(
         //    const EBPT& ebpt_model,
@@ -45,7 +46,9 @@ namespace EBPTns {
             const EdgeGroup& group2,
             float min_distance);
 
-        PlacedGroup transformGroup(const SourceGroupInfo& source_group,
+        PlacedGroup transformGroup(
+            const SourceGroupInfo& source_info,
+            const cv::Mat& input_image,
             int source_idx,
             const cv::Point2f& position,
             float angle, float scale) const;
