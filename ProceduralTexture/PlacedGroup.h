@@ -9,18 +9,17 @@ namespace EBPTns {
     struct PlacedGroup {
         EdgeGroup group;           // Трансформированная группа
         int source_index;          // Индекс в исходном массиве групп
-        int superpixel_id;
         float scale_factor;     
         float rotation_angle;   
         cv::Point2f translation;
         std::vector<cv::Point> hull;
         cv::Mat mask;
 
-        PlacedGroup() : source_index(-1), scale_factor(1.0f), rotation_angle(0.0f), superpixel_id(-1) {}
+        PlacedGroup() : source_index(-1), scale_factor(1.0f), rotation_angle(0.0f) {}
 
-        PlacedGroup(const EdgeGroup& g, int idx, int sp_id, float scale = 1.0f,
+        PlacedGroup(const EdgeGroup& g, int idx, float scale = 1.0f,
             float angle = 0.0f, const cv::Point2f& trans = cv::Point2f(0, 0))
-            : group(g), source_index(idx), superpixel_id(sp_id), scale_factor(scale),
+            : group(g), source_index(idx), scale_factor(scale),
             rotation_angle(angle), translation(trans) {
         }
 

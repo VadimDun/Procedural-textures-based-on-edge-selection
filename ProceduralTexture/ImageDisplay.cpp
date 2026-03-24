@@ -500,7 +500,7 @@ cv::Mat ImageDisplay::drawPlacementMap(
 
             // Используем bounding box от hull для текста
             cv::Rect bbox = cv::boundingRect(placed.hull);
-            std::string edge_count = "E:" + std::to_string(group.getEdges().size());
+            std::string edge_count = "E:" + std::to_string(group.getEdges().size()) + " G:" + std::to_string(placed.source_index);
             cv::putText(placement_map, edge_count,
                 cv::Point(bbox.x, bbox.y - 5),
                 cv::FONT_HERSHEY_SIMPLEX, 0.4,

@@ -37,7 +37,7 @@ namespace EBPTns {
         float min_distance_ = 30.0f;
         cv::Size outputSize;
 
-        cv::Point2f generateRandomPosition(int width, int height);
+        cv::Point2f generateRandomPosition();
         float generateRandomAngle(float base_angle, float variation);
         float generateRandomScale(float base_scale, float variation);
 
@@ -48,7 +48,7 @@ namespace EBPTns {
         PlacedGroup transformGroup(const SourceGroupInfo& source_group,
             int source_idx,
             const cv::Point2f& position,
-            float angle, float scale);
+            float angle, float scale) const;
     };
 
 }

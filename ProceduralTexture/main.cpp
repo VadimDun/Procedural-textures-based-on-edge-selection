@@ -143,14 +143,14 @@ int main(int argc, char** argv) {
 
     //////////////////////////////////
 
-    float scale = 1.0f;
+    float scale = 2.0f;
     float density = 0.7f;
-    float angle_spread = 0.3f;
+    float angle_spread = 0.1f;
 
     if (use_real_texture) {
         scale = 0.8f;
         density = 0.6f;
-        angle_spread = 0.4f;
+        angle_spread = 0.1f;
     }
 
     ebpt_model.setScale(scale);
@@ -175,7 +175,7 @@ int main(int argc, char** argv) {
 
     float synth_density = density * 1.5f;
     float synth_angle_variation = angle_spread * 1.2f;
-    float synth_scale_variation = 0.1f;
+    float synth_scale_variation = 0.5f;
 
     const auto& source_groups = ebpt_model.getEdgeGroups();
     std::vector<PlacedGroup> placed_groups = synthesizer.synthesizePlacement(

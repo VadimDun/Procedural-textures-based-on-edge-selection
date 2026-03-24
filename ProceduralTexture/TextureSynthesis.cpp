@@ -17,18 +17,18 @@ namespace EBPTns {
         rng_.seed(seed);
     }
 
-    cv::Point2f TextureSynthesis::generateRandomPosition(int width, int height) {
-        if (width <= 0 || height <= 0) {
+    cv::Point2f TextureSynthesis::generateRandomPosition() {
+        if (outputSize.width <= 0 || outputSize.height <= 0) {
             return cv::Point2f(0, 0);
         }
         float margin = 50.0f;
         std::uniform_real_distribution<float> dist_x(
             margin,
-            std::max(margin, static_cast<float>(width) - margin)
+            std::max(margin, static_cast<float>(outputSize.width) - margin)
         );
         std::uniform_real_distribution<float> dist_y(
             margin,
-            std::max(margin, static_cast<float>(height) - margin)
+            std::max(margin, static_cast<float>(outputSize.height) - margin)
         );
         return cv::Point2f(dist_x(rng_), dist_y(rng_));
     }
@@ -73,7 +73,7 @@ namespace EBPTns {
     PlacedGroup TextureSynthesis::transformGroup(const SourceGroupInfo& source_info,
         int source_idx,
         const cv::Point2f& position,
-        float angle, float scale) {
+        float angle, float scale) const {
 
         EdgeGroup transformed_group = source_info.group;
 
@@ -99,7 +99,7 @@ namespace EBPTns {
         // Вычисляем полное смещение
         cv::Point2f translation = position - original_center;
 
-        PlacedGroup placed_group(transformed_group, source_idx, source_info.superpixel_id,
+        PlacedGroup placed_group(transformed_group, source_idx,
             scale, angle, translation);
 
         placed_group.mask = TextureAnalysis::getMask(transformed_group, outputSize, placed_group.hull);
@@ -125,6 +125,7 @@ namespace EBPTns {
         // Рассчитываем количество групп для размещения
         float area_ratio = static_cast<float>(outputSize.width * outputSize.height) / (512.0f * 512.0f);
         int target_count = static_cast<int>(source_groups.size() * density * area_ratio * 2.0f);
+        //int target_count = static_cast<int>(source_groups.size() * density * 2.0f);
         target_count = std::max(3, std::min(target_count, 50));
 
         std::cout << "Target groups: " << target_count << std::endl;
@@ -132,7 +133,6 @@ namespace EBPTns {
         // Распределение для выбора исходных групп
         std::uniform_int_distribution<int> group_dist(0, static_cast<int>(source_groups.size()) - 1);
 
-        std::vector<int> usage_count(source_groups.size(), 0);
         int placed_count = 0;
         int overlap_count = 0;
         int max_attempts = 1000;
@@ -143,7 +143,7 @@ namespace EBPTns {
             int source_idx = group_dist(rng_);
             const SourceGroupInfo& source_info = source_groups[source_idx];
 
-            cv::Point2f position = generateRandomPosition(outputSize.width, outputSize.height);
+            cv::Point2f position = generateRandomPosition();
             float angle = generateRandomAngle(source_info.group.getAverageAngle(), angle_variation);
             float scale = generateRandomScale(1.0f, scale_variation);
 
@@ -165,7 +165,6 @@ namespace EBPTns {
             }
 
             placed_groups.push_back(placed_group);
-            usage_count[source_idx]++;
             placed_count++;
         }
 
