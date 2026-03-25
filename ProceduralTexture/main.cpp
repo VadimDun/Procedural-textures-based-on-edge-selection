@@ -106,58 +106,18 @@ int main(int argc, char** argv) {
 
     EBPT ebpt_model = result.modelEBPT;
 
-    //double thresholds[] = { 0.2, 0.4, 0.6, 0.8 };
-    //for (double th : thresholds) {
-    //    cv::Mat binary;
-    //    cv::threshold(result.edge_probability_map, binary, th, 255, cv::THRESH_BINARY);
-    //    binary.convertTo(binary, CV_8UC1);
-    //    ImageDisplay::save("images/edges_th_" + std::to_string(th) + ".png", binary);
-    //}
-
-    //int histSize = 20;
-    //float range[] = { 0, 1 };
-    //const float* histRange = { range };
-    //cv::Mat hist;
-    //cv::calcHist(&result.edge_probability_map, 1, 0, cv::Mat(),
-    //    hist, 1, &histSize, &histRange);
-
-    // //Нормализуем для отображения
-    //cv::normalize(hist, hist, 0, 255, cv::NORM_MINMAX);
-
-    // //Смотрим результат
-    //std::cout << "Распределение вероятностей:" << std::endl;
-    //for (int i = 0; i < histSize; i++) {
-    //    float bin_start = i * (1.0f / histSize);
-    //    float bin_end = (i + 1) * (1.0f / histSize);
-    //    float value = hist.at<float>(i);
-    //    std::cout << "  " << bin_start << "-" << bin_end << ": "
-    //        << value << " пикселей" << std::endl;
-    //}
-
     /////////////////////////////
     // Бины
     /////////////////////////////
 
-    //ImageDisplay::visualizeEdgeBins(input_image, result.edges, "images/edge_bins_structured.png");
-    //ImageDisplay::visualizeBinDistribution(result.edges, "images/bin_distribution.png");
+    //ImageDisplay::visualizeEdgeBins(input_image, result.modelEBPT.getEdgeGroups(), "images/edge_bins_structured.png");
+    //ImageDisplay::visualizeBinDistribution(result.modelEBPT.getEdgeGroups(), "images/bin_distribution.png");
 
     //////////////////////////////////
 
-    float scale = 2.0f;
-    float density = 0.7f;
-    float angle_spread = 0.1f;
-
-    if (use_real_texture) {
-        scale = 0.8f;
-        density = 0.6f;
-        angle_spread = 0.1f;
-    }
-
-    ebpt_model.setScale(scale);
-    ebpt_model.setDensity(density);
-    ebpt_model.setAngleSpread(angle_spread);
-
+    /////////////////////////////
     // Синтез размещения
+    /////////////////////////////
     cv::Size outSize;
     if (use_real_texture) {
         outSize.height = input_image.rows * 2;
@@ -173,17 +133,43 @@ int main(int argc, char** argv) {
     synthesizer.setAvoidOverlap(true);
     synthesizer.setMinDistance(40.0f);
 
-    float synth_density = density * 1.5f;
-    float synth_angle_variation = angle_spread * 1.2f;
-    float synth_scale_variation = 0.5f;
+    float scale = 0.5f;
+    float density = 1.3f;
+    float angle_spread = 0.1f;
+
+    if (use_real_texture) {
+        scale = 0.2f;
+        density = 0.9f;
+        bool enable_rotation = true;
+
+        if (argc > 2) {
+            std::string arg2 = argv[2];
+            if (arg2 == "0" || arg2 == "false" || arg2 == "off" || arg2 == "no") {
+                enable_rotation = false;
+                std::cout << "Rotation disabled" << std::endl;
+            }
+            else if (arg2 == "1" || arg2 == "true" || arg2 == "on" || arg2 == "yes") {
+                enable_rotation = true;
+                std::cout << "Rotation enabled" << std::endl;
+            }
+            else {
+                std::cout << "Unknown rotation parameter: " << arg2
+                    << ". Using default (rotation enabled)" << std::endl;
+            }
+        }
+
+        if (enable_rotation)
+            angle_spread = 0.1f;
+        else angle_spread = 0.0f;
+    }
 
     const auto& source_groups = ebpt_model.getEdgeGroups();
     std::vector<PlacedGroup> placed_groups = synthesizer.synthesizePlacement(
         input_image,
         source_groups,
-        synth_density,
-        synth_angle_variation,
-        synth_scale_variation);
+        density,
+        angle_spread,
+        scale);
 
     // Визуализируем размещение
     cv::Mat placement_map = ImageDisplay::drawPlacementMap(
@@ -217,9 +203,9 @@ int main(int argc, char** argv) {
             placed_groups = synthesizer.synthesizePlacement(
                 input_image,
                 source_groups,
-                synth_density,
-                synth_angle_variation,
-                synth_scale_variation);
+                density,
+                angle_spread,
+                scale);
 
             placement_map = ImageDisplay::drawPlacementMap(
                 placed_groups, outSize

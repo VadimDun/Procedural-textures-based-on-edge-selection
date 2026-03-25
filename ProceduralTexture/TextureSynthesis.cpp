@@ -35,11 +35,12 @@ namespace EBPTns {
 
     float TextureSynthesis::generateRandomAngle(float base_angle, float variation) {
         if (variation <= 0.0f) {
-            return base_angle;
+            return 0.0f;
         }
         float max_variation = variation * CV_PI;
         std::uniform_real_distribution<float> dist(-max_variation, max_variation);
-        float random_angle = base_angle + dist(rng_);
+        //float random_angle = base_angle + dist(rng_);
+        float random_angle = dist(rng_);
         while (random_angle < 0) random_angle += CV_PI;
         while (random_angle >= CV_PI) random_angle -= CV_PI;
         return random_angle;

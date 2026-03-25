@@ -193,6 +193,33 @@ cv::Mat ImageDisplay::visualizeGroups(const cv::Mat& image, const std::vector<So
         );
         cv::circle(visualization, group_center, 5, color, -1);
 
+        // Рисуем направление угла (средний угол группы)
+        float angle = group.getAverageAngle();
+
+        // Вычисляем длину линии (пропорционально размеру группы)
+        float group_radius = group.getRadialSpread();
+        float line_length = std::max(20.0f, group_radius * 1.2f);
+
+        // Направление от центра
+        cv::Point2f direction(cos(angle) * line_length, sin(angle) * line_length);
+        cv::Point start_point(
+            static_cast<int>(group_center.x - direction.x * 0.5f),
+            static_cast<int>(group_center.y - direction.y * 0.5f)
+        );
+        cv::Point end_point(
+            static_cast<int>(group_center.x + direction.x * 0.5f),
+            static_cast<int>(group_center.y + direction.y * 0.5f)
+        );
+
+        cv::arrowedLine(visualization, start_point, end_point,
+            cv::Scalar(0, 255, 255), 2, cv::LINE_AA, 0, 0.3);
+
+        std::string angle_text = std::to_string(static_cast<int>(angle * 180 / CV_PI)) + "°";
+        cv::putText(visualization, angle_text,
+            cv::Point(static_cast<int>(group_center.x + 15), static_cast<int>(group_center.y - 15)),
+            cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
+
+        // Рисуем выпуклую оболочку
         const std::vector<cv::Point>& hull = group_info.hull;
 
         if (!hull.empty() && hull.size() >= 3) {
@@ -203,10 +230,10 @@ cv::Mat ImageDisplay::visualizeGroups(const cv::Mat& image, const std::vector<So
             }
 
             // Заливка с прозрачностью
-             cv::Mat overlay = visualization.clone();
-             cv::fillPoly(overlay, std::vector<std::vector<cv::Point>>{hull}, 
-                          cv::Scalar(color[0], color[1], color[2], 100));
-             cv::addWeighted(overlay, 0.3, visualization, 0.7, 0, visualization);
+            cv::Mat overlay = visualization.clone();
+            cv::fillPoly(overlay, std::vector<std::vector<cv::Point>>{hull},
+                cv::Scalar(color[0], color[1], color[2]));
+            cv::addWeighted(overlay, 0.3, visualization, 0.7, 0, visualization);
 
             // Вычисляем bounding box для размещения текста
             cv::Rect bbox = cv::boundingRect(hull);
@@ -507,7 +534,7 @@ cv::Mat ImageDisplay::drawPlacementMap(
                 color, 1);
         }
 
-        // Рисуем направление (используем тот же угол)
+        // Рисуем направление
         float angle = placed.rotation_angle;
         int line_length = 40;  // Увеличим для наглядности
         cv::Point direction(
