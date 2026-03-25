@@ -71,6 +71,87 @@ namespace EBPTns {
         return distance < (combined_radius + min_distance);
     }
 
+    bool TextureSynthesis::checkHullIntersection(const std::vector<cv::Point>& hull1,
+        const std::vector<cv::Point>& hull2) const {
+        if (hull1.empty() || hull2.empty() || hull1.size() < 3 || hull2.size() < 3) {
+            return false;
+        }
+
+        for (size_t i = 0; i < hull1.size(); ++i) {
+            cv::Point p1 = hull1[i];
+            cv::Point p2 = hull1[(i + 1) % hull1.size()];
+
+            for (size_t j = 0; j < hull2.size(); ++j) {
+                cv::Point q1 = hull2[j];
+                cv::Point q2 = hull2[(j + 1) % hull2.size()];
+
+                if (doSegmentsIntersect(p1, p2, q1, q2)) {
+                    return true;
+                }
+            }
+        }
+
+        // Проверка на нахождение hull внутри другого
+        if (isPointInPolygon(hull1[0], hull2) || isPointInPolygon(hull2[0], hull1)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    // Вспомогательная функция для проверки пересечения двух отрезков
+    bool TextureSynthesis::doSegmentsIntersect(const cv::Point& p1, const cv::Point& p2,
+        const cv::Point& q1, const cv::Point& q2) const {
+        auto orientation = [](const cv::Point& a, const cv::Point& b, const cv::Point& c) -> int {
+            int val = (b.y - a.y) * (c.x - b.x) - (b.x - a.x) * (c.y - b.y);
+            if (val == 0) return 0;  // Коллинеарны
+            return (val > 0) ? 1 : 2; // 1 - по часовой, 2 - против часовой
+            };
+
+        int o1 = orientation(p1, p2, q1);
+        int o2 = orientation(p1, p2, q2);
+        int o3 = orientation(q1, q2, p1);
+        int o4 = orientation(q1, q2, p2);
+
+        // Общий случай
+        if (o1 != o2 && o3 != o4) return true;
+
+        // Если коллинеарны
+        if (o1 == 0 && onSegment(p1, q1, p2)) return true;
+        if (o2 == 0 && onSegment(p1, q2, p2)) return true;
+        if (o3 == 0 && onSegment(q1, p1, q2)) return true;
+        if (o4 == 0 && onSegment(q1, p2, q2)) return true;
+
+        return false;
+    }
+
+    // Вспомогательная функция для проверки, лежит ли точка на отрезке
+    bool TextureSynthesis::onSegment(const cv::Point& p, const cv::Point& q, const cv::Point& r) const {
+        if (q.x <= std::max(p.x, r.x) && q.x >= std::min(p.x, r.x) &&
+            q.y <= std::max(p.y, r.y) && q.y >= std::min(p.y, r.y)) {
+            return true;
+        }
+        return false;
+    }
+
+    // Вспомогательная функция для проверки, находится ли точка внутри полигона
+    bool TextureSynthesis::isPointInPolygon(const cv::Point& point, const std::vector<cv::Point>& polygon) const {
+        if (polygon.size() < 3) return false;
+
+        bool inside = false;
+        for (size_t i = 0, j = polygon.size() - 1; i < polygon.size(); j = i++) {
+            const cv::Point& p1 = polygon[i];
+            const cv::Point& p2 = polygon[j];
+
+            if (((p1.y > point.y) != (p2.y > point.y)) &&
+                (point.x < (p2.x - p1.x) * (point.y - p1.y) / (p2.y - p1.y) + p1.x)) {
+                inside = !inside;
+            }
+        }
+
+        return inside;
+    }
+
     PlacedGroup TextureSynthesis::transformGroup(
         const SourceGroupInfo& source_info,
         const cv::Mat& input_image,
@@ -194,7 +275,6 @@ namespace EBPTns {
         // Рассчитываем количество групп для размещения
         float area_ratio = static_cast<float>(outputSize.width * outputSize.height) / (512.0f * 512.0f);
         int target_count = static_cast<int>(source_groups.size() * density * area_ratio * 2.0f);
-        //int target_count = static_cast<int>(source_groups.size() * density * 2.0f);
         target_count = std::max(3, std::min(target_count, 50));
 
         std::cout << "Target groups: " << target_count << std::endl;
@@ -221,9 +301,18 @@ namespace EBPTns {
 
             if (avoid_overlap_ && placed_count > 0) {
                 bool has_overlap = false;
+
+                // Проверяем пересечение с существующими группами
                 for (const auto& existing : placed_groups) {
+                    // Если у обеих групп есть hull, проверяем пересечение hull
                     if (!placed_group.hull.empty() && !existing.hull.empty()) {
-                        // TODO: добавить проверку пересечения hull
+                        if (checkHullIntersection(placed_group.hull, existing.hull)) {
+                            has_overlap = true;
+                            break;
+                        }
+                    }
+                    // Если hull нет, используем расстояние между центрами
+                    else {
                         float dx = placed_group.position.x - existing.position.x;
                         float dy = placed_group.position.y - existing.position.y;
                         float distance = std::sqrt(dx * dx + dy * dy);

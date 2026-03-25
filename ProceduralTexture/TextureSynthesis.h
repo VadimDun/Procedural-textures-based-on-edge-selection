@@ -52,6 +52,13 @@ namespace EBPTns {
             int source_idx,
             const cv::Point2f& position,
             float angle, float scale) const;
+
+        bool checkHullIntersection(const std::vector<cv::Point>& hull1,
+            const std::vector<cv::Point>& hull2) const;
+        bool doSegmentsIntersect(const cv::Point& p1, const cv::Point& p2,
+            const cv::Point& q1, const cv::Point& q2) const;
+        bool onSegment(const cv::Point& p, const cv::Point& q, const cv::Point& r) const;
+        bool isPointInPolygon(const cv::Point& point, const std::vector<cv::Point>& polygon) const;
     };
 
 }
