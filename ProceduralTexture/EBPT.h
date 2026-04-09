@@ -7,6 +7,13 @@
 
 namespace EBPTns {
 
+    struct SourceGroupInfo {
+        EdgeGroup group;
+        int superpixel_id;
+        cv::Mat mask;
+        std::vector<cv::Point> hull;
+    };
+
     class EBPT {
     public:
         EBPT() = default;
@@ -19,17 +26,17 @@ namespace EBPTns {
         void setAngleSpread(float spread) { angle_spread_ = spread; }
 
         const cv::Mat& getInputImage() const { return input_image_; }
-        const std::vector<EdgeGroup>& getEdgeGroups() const { return edge_groups_; }
+        const std::vector<SourceGroupInfo>& getEdgeGroups() const { return edge_groups_; }
         int getNumGroups() const { return static_cast<int>(edge_groups_.size()); }
 
         void clear();
         bool isEmpty() const { return edge_groups_.empty(); }
 
-        void addEdgeGroup(const EdgeGroup& group);
+        void addEdgeGroup(const SourceGroupInfo& group);
 
     private:
         cv::Mat input_image_;               
-        std::vector<EdgeGroup> edge_groups_;
+        std::vector<SourceGroupInfo> edge_groups_;
 
         float scale_ = 1.0f;
         float density_ = 1.0f;                    // Плотность (0.0-1.0)
