@@ -46,6 +46,8 @@ public:
         const std::vector<PlacedGroup>& placed_groups,
         const cv::Size& size);
 
+    static void showOccupancyMap(const cv::Mat& occupancy_map, const std::string& title = "Occupancy Map");
+
     static void visualizeEdgeBins(const cv::Mat& input_image,
         const std::vector<EBPTns::Edge>& edges,
         const std::string& filename = "images/edge_bins.png");

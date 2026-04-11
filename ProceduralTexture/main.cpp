@@ -128,29 +128,25 @@ int main(int argc, char** argv) {
         outSize.height = 600;
     }
 
-    TextureSynthesis synthesizer(outSize);
-    synthesizer.setRandomSeed(42);
-    synthesizer.setAvoidOverlap(true);
-    synthesizer.setMinDistance(40.0f);
-
     float scale = 0.5f;
     float density = 1.3f;
     float angle_spread = 0.1f;
 
+    bool enable_rotation = true;
+
     if (use_real_texture) {
         scale = 0.2f;
         density = 0.9f;
-        bool enable_rotation = true;
 
         if (argc > 2) {
             std::string arg2 = argv[2];
             if (arg2 == "0" || arg2 == "false" || arg2 == "off" || arg2 == "no") {
                 enable_rotation = false;
-                std::cout << "Rotation disabled" << std::endl;
+                std::cout << "\n\n---------------------Rotation disabled---------------------\n\n" << std::endl;
             }
             else if (arg2 == "1" || arg2 == "true" || arg2 == "on" || arg2 == "yes") {
                 enable_rotation = true;
-                std::cout << "Rotation enabled" << std::endl;
+                std::cout << "\n\n---------------------Rotation enabled---------------------\n\n" << std::endl;
             }
             else {
                 std::cout << "Unknown rotation parameter: " << arg2
@@ -163,13 +159,30 @@ int main(int argc, char** argv) {
         else angle_spread = 0.0f;
     }
 
+    TextureSynthesis synthesizer(outSize, enable_rotation);
+    synthesizer.setRandomSeed(42);
+    synthesizer.setAvoidOverlap(true);
+    synthesizer.setMinDistance(40.0f);
+    
     const auto& source_groups = ebpt_model.getEdgeGroups();
-    std::vector<PlacedGroup> placed_groups = synthesizer.synthesizePlacement(
-        input_image,
-        source_groups,
-        density,
-        angle_spread,
-        scale);
+
+    std::vector<PlacedGroup> placed_groups;
+    bool hierarchical_enabled = true;
+    if (hierarchical_enabled) {
+        placed_groups = synthesizer.synthesizeHierarchicalPlacement(
+            input_image,
+            source_groups
+        );
+    }
+    else {
+        placed_groups = synthesizer.synthesizePlacement(
+            input_image,
+            source_groups,
+            density,
+            angle_spread,
+            scale
+        );
+    }
 
     // Визуализируем размещение
     cv::Mat placement_map = ImageDisplay::drawPlacementMap(
@@ -200,12 +213,21 @@ int main(int argc, char** argv) {
         case 'К':
         case 'r':
         case 'R':
-            placed_groups = synthesizer.synthesizePlacement(
-                input_image,
-                source_groups,
-                density,
-                angle_spread,
-                scale);
+            if (hierarchical_enabled) {
+                placed_groups = synthesizer.synthesizeHierarchicalPlacement(
+                    input_image,
+                    source_groups
+                );
+            }
+            else {
+                placed_groups = synthesizer.synthesizePlacement(
+                    input_image,
+                    source_groups,
+                    density,
+                    angle_spread,
+                    scale
+                );
+            }
 
             placement_map = ImageDisplay::drawPlacementMap(
                 placed_groups, outSize

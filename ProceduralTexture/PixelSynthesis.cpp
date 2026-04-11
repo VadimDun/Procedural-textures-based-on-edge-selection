@@ -155,8 +155,8 @@ namespace EBPTns {
             local_center.y = std::max(0, std::min(local_center.y, target_bbox.height - 1));
 
             // Вставляем патч
-            bool use_seamless = (patch_part.rows >= 6 && patch_part.cols >= 6 &&
-                binary_mask.rows >= 6 && binary_mask.cols >= 6);
+            bool use_seamless = (patch_part.rows >= 8 && patch_part.cols >= 8 &&
+                binary_mask.rows >= 8 && binary_mask.cols >= 8);
 
             if (use_seamless) {
                 try {

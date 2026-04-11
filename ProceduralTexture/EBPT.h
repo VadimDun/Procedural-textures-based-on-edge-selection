@@ -7,11 +7,30 @@
 
 namespace EBPTns {
 
+    enum class ScaleLevel {
+        LARGE,
+        MEDIUM,
+        SMALL,
+        FINE
+    };
+
+    inline std::string scaleLevelToString(ScaleLevel level) {
+        switch (level) {
+        case ScaleLevel::LARGE:  return "LARGE";
+        case ScaleLevel::MEDIUM: return "MEDIUM";
+        case ScaleLevel::SMALL:  return "SMALL";
+        case ScaleLevel::FINE:   return "FINE";
+        default: return "UNKNOWN";
+        }
+    }
+
     struct SourceGroupInfo {
         EdgeGroup group;
         int superpixel_id;
         cv::Mat mask;
         std::vector<cv::Point> hull;
+
+        ScaleLevel scale_level;
     };
 
     class EBPT {

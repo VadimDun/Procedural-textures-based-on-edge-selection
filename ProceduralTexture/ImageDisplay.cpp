@@ -567,6 +567,15 @@ cv::Mat ImageDisplay::drawPlacementMap(
     return placement_map;
 }
 
+void ImageDisplay::showOccupancyMap(const cv::Mat& occupancy_map, const std::string& title) {
+    if (occupancy_map.empty()) return;
+
+    cv::Mat display;
+    cv::applyColorMap(occupancy_map, display, cv::COLORMAP_JET);
+    show(title, display);
+    cv::waitKey(1);
+}
+
 void ImageDisplay::drawArrow(cv::Mat& img, const cv::Point& end, float angle, const cv::Scalar& color) {
     double arrow_angle = angle;
     int arrow_length = 12;
