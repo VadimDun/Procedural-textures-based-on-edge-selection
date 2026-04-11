@@ -3,7 +3,6 @@
 #include <cmath>
 #include <iostream>
 #include <algorithm>
-#include <numeric>
 #include "TextureAnalysis.h"
 #include "ImageDisplay.h"
 
@@ -23,24 +22,28 @@ namespace EBPTns {
         large_params.density = 0.4f;           // Меньше групп, но крупных
         large_params.base_scale = 1.2f;
         large_params.scale_variation = 0.3f;
+        large_params.percent_fill_target = 0.4f;
 
         // Параметры для среднего масштаба (основная текстура)
         ScaleLevelParams medium_params;
         medium_params.density = 0.8f;
         medium_params.base_scale = 1.0f;
         medium_params.scale_variation = 0.3f;
+        medium_params.percent_fill_target = 0.7f;
 
         // Параметры для мелкого масштаба (детали)
         ScaleLevelParams small_params;
         small_params.density = 1.2f;
         small_params.base_scale = 0.85f;
         small_params.scale_variation = 0.4f;
+        small_params.percent_fill_target = 0.9f;
 
         // Сверхмелкий масштаб
         ScaleLevelParams fine_params;
         fine_params.density = 1.5f;
         fine_params.base_scale = 1.0f;
         fine_params.scale_variation = 0.5f;
+        fine_params.percent_fill_target = 0.95f;
 
         if (enable_rotation) {
             large_params.angle_variation = medium_params.angle_variation = small_params.angle_variation = 0.25f;
@@ -200,163 +203,6 @@ namespace EBPTns {
 
     ////////////////////////////////////
 
-    void TextureSynthesis::classifySourceGroups(std::vector<SourceGroupInfo>& source_groups) {
-        const bool USE_RADIAL_SPRED = true;
-        if (source_groups.empty()) return;
-
-        std::vector<float> group_sizes;
-        group_sizes.reserve(source_groups.size());
-
-        for (const auto& group_info : source_groups) {
-            float size = USE_RADIAL_SPRED ? group_info.group.getRadialSpread() : cv::contourArea(group_info.hull);
-            if (size == 0) continue;
-            group_sizes.push_back(size);
-        }
-
-        std::vector<float> sorted_sizes = group_sizes;
-        std::sort(sorted_sizes.begin(), sorted_sizes.end());
-
-        size_t n = sorted_sizes.size();
-
-        // СТРАТЕГИЯ 1: Поиск естественных разрывов
-        std::vector<float> gaps;
-
-        // Находим наибольшие разрывы между последовательными размерами
-        for (size_t i = 1; i < n; ++i) {
-            float gap = sorted_sizes[i] - sorted_sizes[i - 1];
-            gaps.push_back(gap);
-        }
-
-        // Сортируем разрывы по убыванию
-        std::vector<int> sorted_indices(gaps.size());
-        std::iota(sorted_indices.begin(), sorted_indices.end(), 0);
-        std::sort(sorted_indices.begin(), sorted_indices.end(),
-            [&gaps](int a, int b) { return gaps[a] > gaps[b]; });
-
-        //for (size_t i = 0; i < n-1; ++i) {
-        //    std::cout << "sorted gap " << i << ": " << gaps[sorted_indices[i]] << std::endl;
-        //}
-
-        // Используем 2 наибольших разрыва для разделения на 3 категории (крупные/средние/мелкие)
-        if (n >= 4 && sorted_indices.size() >= 2) {
-            int gap1_idx = sorted_indices[0];
-            int split1 = gap1_idx + 1;
-
-            int gap2_idx = sorted_indices[1];
-            int split2 = gap2_idx + 1;
-
-            // взяли два самых больших разрыва. разрыв с меньшим индексом разделяет large и 
-            // medium(так как меньший индекс ближе к началу в отсортированном по размеру массиве)
-            int lower_split = std::min(split1, split2);
-            int upper_split = std::max(split1, split2);
-
-            // Устанавливаем пороги на основе разрывов
-            large_scale_threshold_ = sorted_sizes[upper_split];
-            medium_scale_threshold_ = sorted_sizes[lower_split];
-
-            // Для FINE используем самый маленький размер или порог
-            small_scale_threshold_ = sorted_sizes[0];
-
-            std::cout << "Using natural breakpoints strategy:" << std::endl;
-        }
-        // СТРАТЕГИЯ 2: На основе среднего и стандартного отклонения
-        else if (n >= 3) {
-            float mean = 0.0f;
-            for (float s : group_sizes) mean += s;
-            mean /= n;
-
-            float variance = 0.0f;
-            for (float s : group_sizes) {
-                variance += (s - mean) * (s - mean);
-            }
-            variance /= n;
-            float std_dev = std::sqrt(variance);
-
-            // Пороги: mean ± 0.5*std_dev (можно настроить коэффициент)
-            large_scale_threshold_ = mean + 0.5f * std_dev;
-            medium_scale_threshold_ = mean - 0.5f * std_dev;
-            small_scale_threshold_ = mean - 1.0f * std_dev;
-
-            std::cout << "Using statistical thresholds (mean=" << mean
-                << ", std=" << std_dev << "):" << std::endl;
-        }
-        else {
-            float min_size = sorted_sizes[0];
-            float max_size = sorted_sizes[n - 1];
-            float range = max_size - min_size;
-
-            large_scale_threshold_ = min_size + range * 0.75f;
-            medium_scale_threshold_ = min_size + range * 0.5f;
-            small_scale_threshold_ = min_size + range * 0.25f;
-            std::cout << "Using area:" << std::endl;
-        }
-
-        std::cout << "Scale thresholds: LARGE >= " << large_scale_threshold_
-            << ", MEDIUM >= " << medium_scale_threshold_
-            << ", SMALL >= " << small_scale_threshold_
-            << ", FINE < " << small_scale_threshold_ << std::endl;
-
-        // Классифицируем каждую группу
-        for (auto& group_info : source_groups) {
-            float size = USE_RADIAL_SPRED ? group_info.group.getRadialSpread() : cv::contourArea(group_info.hull);
-
-            if (size >= large_scale_threshold_) {
-                group_info.scale_level = ScaleLevel::LARGE;
-            }
-            else if (size >= medium_scale_threshold_) {
-                group_info.scale_level = ScaleLevel::MEDIUM;
-            }
-            else if (size >= small_scale_threshold_) {
-                group_info.scale_level = ScaleLevel::SMALL;
-            }
-            else {
-                group_info.scale_level = ScaleLevel::FINE;
-            }
-
-            std::cout << "Group " << (&group_info - &source_groups[0])
-                << ": size=" << size
-                << ", level=" << scaleLevelToString(group_info.scale_level) << std::endl;
-        }
-
-        checkAndAdjustThresholds(source_groups);
-    }
-
-    // TODO сделать проверку каждой группы
-    // Вспомогательный метод для проверки и коррекции
-    void TextureSynthesis::checkAndAdjustThresholds(std::vector<SourceGroupInfo>& source_groups) {
-        int large_count = 0, medium_count = 0, small_count = 0, fine_count = 0;
-
-        for (const auto& group : source_groups) {
-            switch (group.scale_level) {
-            case ScaleLevel::LARGE: large_count++; break;
-            case ScaleLevel::MEDIUM: medium_count++; break;
-            case ScaleLevel::SMALL: small_count++; break;
-            case ScaleLevel::FINE: fine_count++; break;
-            }
-        }
-
-        // Если более 80% групп в одном уровне, корректируем пороги
-        int total = source_groups.size();
-        if (large_count > total * 0.8f) {
-            std::cout << "Warning: Too many LARGE groups, adjusting thresholds..." << std::endl;
-            large_scale_threshold_ *= 0.7f;
-            medium_scale_threshold_ *= 0.7f;
-            // Переклассифицируем
-            for (auto& group : source_groups) {
-                float size = group.group.getRadialSpread();
-                if (size >= large_scale_threshold_) {
-                    group.scale_level = ScaleLevel::LARGE;
-                }
-                else if (size >= medium_scale_threshold_) {
-                    group.scale_level = ScaleLevel::MEDIUM;
-                }
-                else {
-                    group.scale_level = ScaleLevel::SMALL;
-                }
-            }
-        }
-    }
-
     void TextureSynthesis::updateOccupancyMap(const PlacedGroup& group) {
         if (occupancy_map_.empty()) return;
 
@@ -484,12 +330,6 @@ namespace EBPTns {
         float area = cv::intersectConvexConvex(hull1, hull2, intersectionPolygon, true);
 
         return (area > 0) ? area : 0.0f;
-    }
-
-    void TextureSynthesis::setScaleThresholds(float large, float medium, float small) {
-        large_scale_threshold_ = large;
-        medium_scale_threshold_ = medium;
-        small_scale_threshold_ = small;
     }
 
     PlacedGroup TextureSynthesis::transformGroup(
@@ -689,12 +529,9 @@ namespace EBPTns {
 
         occupancy_map_ = cv::Mat::zeros(outputSize.height, outputSize.width, CV_8UC1);
 
-        std::vector<SourceGroupInfo> classified_groups = source_groups;
-        classifySourceGroups(classified_groups); // todo вынести в анализ
-
         // Группируем исходные группы по уровню
         std::map<ScaleLevel, std::vector<const SourceGroupInfo*>> groups_by_level;
-        for (const auto& group_info : classified_groups) {
+        for (const auto& group_info : source_groups) {
             groups_by_level[group_info.scale_level].push_back(&group_info);
         }
 
@@ -707,29 +544,31 @@ namespace EBPTns {
         };
 
         for (ScaleLevel level : order) {
-            if (groups_by_level[level].empty()) continue;
+            if (groups_by_level[level].empty()) {
+                std::cout << "\nNo " << scaleLevelToString(level) << " groups available, skipping" << std::endl;
+                continue;
+            }
 
             const auto& level_groups = groups_by_level[level];
             const auto& params = scale_params_[level];
 
-            // Рассчитываем целевое количество групп для этого уровня
-            float area_ratio = static_cast<float>(outputSize.width * outputSize.height) / (512.0f * 512.0f);
-            int target_count = static_cast<int>(level_groups.size() * params.density * area_ratio);
-            target_count = std::max(3, std::min(target_count, 30));
+            float current_fill = 0.0f;
+            float target_fill = params.percent_fill_target;
 
             std::cout << "\nPlacing " << scaleLevelToString(level)
-                << " groups: target=" << target_count
-                << ", available=" << level_groups.size() << std::endl;
+                << " groups (target fill: " << (target_fill * 100) << "%)" << std::endl;
 
             // Распределение для выбора исходных групп
             std::uniform_int_distribution<int> group_dist(0, level_groups.size() - 1);
 
             int placed_count = 0;
             int overlap_count = 0;
-            int max_attempts = 500;
+            int max_attempts_per_group = 1000;
+            int total_attempts = 0;
+            const int MAX_TOTAL_ATTEMPTS = 10000;
 
-            while (placed_count < target_count && max_attempts > 0) {
-                max_attempts--;
+            while (current_fill < target_fill && total_attempts < MAX_TOTAL_ATTEMPTS) {
+                total_attempts++;
 
                 int source_idx = group_dist(rng_);
                 const SourceGroupInfo& source_info = *level_groups[source_idx];
@@ -745,20 +584,33 @@ namespace EBPTns {
                 placed_group.scale_level = level;
 
                 // Проверяем перекрытие с уже размещенными группами
+                bool has_overlap = false;
                 if (!all_placed_groups.empty()) {
                     if (checkOverlapByLevel(placed_group, all_placed_groups, level)) {
                         overlap_count++;
-                        continue;
+                        has_overlap = true;
                     }
                 }
+
+                if (has_overlap) {
+                    // Если слишком много попыток подряд безуспешны, возможно, достигнут предел заполнения
+                    if (overlap_count > max_attempts_per_group) {
+                        std::cout << "  Too many consecutive overlaps (" << overlap_count
+                            << "), moving to next level" << std::endl;
+                        break;
+                    }
+                    continue;
+                }
+
+                // Сброс при успешном размещении
+                overlap_count = 0;
 
                 // Проверяем, что группа не слишком близко к границе
                 if (position.x - placed_group.patch.cols / 2 < 0 ||
                     position.y - placed_group.patch.rows / 2 < 0 ||
                     position.x + placed_group.patch.cols / 2 > outputSize.width ||
                     position.y + placed_group.patch.rows / 2 > outputSize.height) {
-                    // Группа на границе - все равно размещаем, но с предупреждением
-                    if (overlap_count % 50 == 0) {
+                    if (placed_count % 20 == 0) {
                         std::cout << "  Group " << placed_count << " near boundary" << std::endl;
                     }
                 }
@@ -767,22 +619,31 @@ namespace EBPTns {
                 updateOccupancyMap(placed_group);
                 placed_count++;
 
-                //if (placed_count % 10 == 0) {
-                //    std::cout << "  Progress: " << placed_count << "/" << target_count << std::endl;
-                //}
+                // Вычисляем текущее заполнение
+                current_fill = cv::countNonZero(occupancy_map_) / (float)(occupancy_map_.total());
 
-                ImageDisplay::showOccupancyMap(occupancy_map_, "Occupancy after " + scaleLevelToString(level));
+                if (placed_count % 10 == 0 ||
+                    std::abs(current_fill - target_fill) < 0.03f) {
+                    std::cout << "  Progress: placed " << placed_count
+                        << " groups, current fill: " << (current_fill * 100)
+                        << "%, target: " << (target_fill * 100) << "%" << std::endl;
+                }
+
+                 ImageDisplay::showOccupancyMap(occupancy_map_, "Occupancy after " + scaleLevelToString(level));
             }
 
-            std::cout << "  Placed " << placed_count << " " << scaleLevelToString(level)
-                << " groups (overlaps: " << overlap_count << ")" << std::endl;
+            std::cout << "  Finished " << scaleLevelToString(level)
+                << ": placed " << placed_count << " groups"
+                << ", fill: " << (current_fill * 100) << "%"
+                << " (overlaps: " << overlap_count << ")" << std::endl;
         }
 
         float total_filled = cv::countNonZero(occupancy_map_) / (float)(occupancy_map_.total());
         std::cout << "\nFinal occupancy: " << (total_filled * 100) << "%" << std::endl;
 
         if (total_filled < 0.95f) {
-            std::cout << "Attempting to fill remaining gaps..." << std::endl;
+            std::cout << "Warning: Final occupancy (" << (total_filled * 100)
+                << "%) is below 95%" << std::endl;
             // todo
         }
 

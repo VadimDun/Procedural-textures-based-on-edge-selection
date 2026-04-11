@@ -18,16 +18,13 @@ namespace EBPTns {
             float base_scale;        // Базовый масштаб патча
             float scale_variation;   // Вариация масштаба
             float angle_variation;   // Вариация масштаба
-            int target_count;        // Целевое количество групп(todo добавление групп до определенного процента перекрытия)
+            float percent_fill_target; // Сколько процентов нужно заполнить
 
             ScaleLevelParams()
                 : density(1.0f), base_scale(1.0f), scale_variation(0.2f),
-                target_count(0), angle_variation(0.0f) {
+                angle_variation(0.0f), percent_fill_target(0.0f) {
             }
         };
-
-        //void setScaleLevelParams(ScaleLevel level, const ScaleLevelParams& params);
-        void setScaleThresholds(float large_threshold, float medium_threshold, float small_threshold);
 
         // Новый метод для иерархического синтеза
         std::vector<PlacedGroup> synthesizeHierarchicalPlacement(
@@ -62,11 +59,6 @@ namespace EBPTns {
         std::map<ScaleLevel, ScaleLevelParams> scale_params_;
         cv::Mat occupancy_map_;  // Карта заполнения
 
-        // Пороги для классификации масштабов (в пикселях или радиусе)
-        float large_scale_threshold_ = 100.0f;
-        float medium_scale_threshold_ = 50.0f;
-        float small_scale_threshold_ = 20.0f;
-
         // Вспомогательные методы
         void updateOccupancyMap(const PlacedGroup& group);
         float getOccupancyAtPoint(const cv::Point2f& point) const;
@@ -74,8 +66,6 @@ namespace EBPTns {
         bool checkOverlapByLevel(const PlacedGroup& new_group,
             const std::vector<PlacedGroup>& existing_groups,
             ScaleLevel current_level) const;
-        void classifySourceGroups(std::vector<SourceGroupInfo>& source_groups);
-        void checkAndAdjustThresholds(std::vector<SourceGroupInfo>& source_groups);
         void initScaleLevelParams(bool enable_rotation);
         float computeHullIntersectionArea(
             const std::vector<cv::Point>& hull1,

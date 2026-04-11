@@ -57,6 +57,11 @@ namespace EBPTns {
         float superpixel_ruler_ = 10.0f;
         double superpixel_threshold = 0.25;
 
+        // Пороги для классификации масштабов (в пикселях или радиусе)
+        float large_scale_threshold_ = 100.0f;
+        float medium_scale_threshold_ = 50.0f;
+        float small_scale_threshold_ = 20.0f;
+
         // Structured Forests
         cv::Ptr<cv::ximgproc::StructuredEdgeDetection> structured_edge_detector_;
         bool is_structured_initialized_ = false;
@@ -66,6 +71,9 @@ namespace EBPTns {
         std::vector<std::vector<cv::Point>> findContours(const cv::Mat& edges_image);
         std::vector<cv::Point> simplifyContour(const std::vector<cv::Point>& contour);
         bool shouldGroup(const Edge& edge1, const Edge& edge2) const;
+
+        void classifySourceGroups(std::vector<SourceGroupInfo>& source_groups);
+        void checkAndAdjustThresholds(std::vector<SourceGroupInfo>& source_groups);
 
     };
 }

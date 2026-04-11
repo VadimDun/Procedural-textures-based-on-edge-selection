@@ -4,6 +4,7 @@
 #include <cmath>
 #include <iostream>
 #include <fstream>
+#include <numeric>
 
 namespace EBPTns {
 
@@ -271,7 +272,162 @@ namespace EBPTns {
         return superpixel_map;
     }
 
-    
+    void TextureAnalysis::classifySourceGroups(std::vector<SourceGroupInfo>& source_groups) {
+        const bool USE_RADIAL_SPRED = true;
+        if (source_groups.empty()) return;
+
+        std::vector<float> group_sizes;
+        group_sizes.reserve(source_groups.size());
+
+        for (const auto& group_info : source_groups) {
+            float size = USE_RADIAL_SPRED ? group_info.group.getRadialSpread() : cv::contourArea(group_info.hull);
+            if (size == 0) continue;
+            group_sizes.push_back(size);
+        }
+
+        std::vector<float> sorted_sizes = group_sizes;
+        std::sort(sorted_sizes.begin(), sorted_sizes.end());
+
+        size_t n = sorted_sizes.size();
+
+        // СТРАТЕГИЯ 1: Поиск естественных разрывов
+        std::vector<float> gaps;
+
+        // Находим наибольшие разрывы между последовательными размерами
+        for (size_t i = 1; i < n; ++i) {
+            float gap = sorted_sizes[i] - sorted_sizes[i - 1];
+            gaps.push_back(gap);
+        }
+
+        // Сортируем разрывы по убыванию
+        std::vector<int> sorted_indices(gaps.size());
+        std::iota(sorted_indices.begin(), sorted_indices.end(), 0);
+        std::sort(sorted_indices.begin(), sorted_indices.end(),
+            [&gaps](int a, int b) { return gaps[a] > gaps[b]; });
+
+        //for (size_t i = 0; i < n-1; ++i) {
+        //    std::cout << "sorted gap " << i << ": " << gaps[sorted_indices[i]] << std::endl;
+        //}
+
+        // Используем 2 наибольших разрыва для разделения на 3 категории (крупные/средние/мелкие)
+        if (n >= 4 && sorted_indices.size() >= 2) {
+            int gap1_idx = sorted_indices[0];
+            int split1 = gap1_idx + 1;
+
+            int gap2_idx = sorted_indices[1];
+            int split2 = gap2_idx + 1;
+
+            // взяли два самых больших разрыва. разрыв с меньшим индексом разделяет large и 
+            // medium(так как меньший индекс ближе к началу в отсортированном по размеру массиве)
+            int lower_split = std::min(split1, split2);
+            int upper_split = std::max(split1, split2);
+
+            // Устанавливаем пороги на основе разрывов
+            large_scale_threshold_ = sorted_sizes[upper_split];
+            medium_scale_threshold_ = sorted_sizes[lower_split];
+
+            // Для FINE используем самый маленький размер или порог
+            small_scale_threshold_ = sorted_sizes[0];
+
+            std::cout << "Using natural breakpoints strategy:" << std::endl;
+        }
+        // СТРАТЕГИЯ 2: На основе среднего и стандартного отклонения
+        else if (n >= 3) {
+            float mean = 0.0f;
+            for (float s : group_sizes) mean += s;
+            mean /= n;
+
+            float variance = 0.0f;
+            for (float s : group_sizes) {
+                variance += (s - mean) * (s - mean);
+            }
+            variance /= n;
+            float std_dev = std::sqrt(variance);
+
+            // Пороги: mean ± 0.5*std_dev (можно настроить коэффициент)
+            large_scale_threshold_ = mean + 0.5f * std_dev;
+            medium_scale_threshold_ = mean - 0.5f * std_dev;
+            small_scale_threshold_ = mean - 1.0f * std_dev;
+
+            std::cout << "Using statistical thresholds (mean=" << mean
+                << ", std=" << std_dev << "):" << std::endl;
+        }
+        else {
+            float min_size = sorted_sizes[0];
+            float max_size = sorted_sizes[n - 1];
+            float range = max_size - min_size;
+
+            large_scale_threshold_ = min_size + range * 0.75f;
+            medium_scale_threshold_ = min_size + range * 0.5f;
+            small_scale_threshold_ = min_size + range * 0.25f;
+            std::cout << "Using area:" << std::endl;
+        }
+
+        std::cout << "Scale thresholds: LARGE >= " << large_scale_threshold_
+            << ", MEDIUM >= " << medium_scale_threshold_
+            << ", SMALL >= " << small_scale_threshold_
+            << ", FINE < " << small_scale_threshold_ << std::endl;
+
+        // Классифицируем каждую группу
+        for (auto& group_info : source_groups) {
+            float size = USE_RADIAL_SPRED ? group_info.group.getRadialSpread() : cv::contourArea(group_info.hull);
+
+            if (size >= large_scale_threshold_) {
+                group_info.scale_level = ScaleLevel::LARGE;
+            }
+            else if (size >= medium_scale_threshold_) {
+                group_info.scale_level = ScaleLevel::MEDIUM;
+            }
+            else if (size >= small_scale_threshold_) {
+                group_info.scale_level = ScaleLevel::SMALL;
+            }
+            else {
+                group_info.scale_level = ScaleLevel::FINE;
+            }
+
+            std::cout << "Group " << (&group_info - &source_groups[0])
+                << ": size=" << size
+                << ", level=" << scaleLevelToString(group_info.scale_level) << std::endl;
+        }
+
+        checkAndAdjustThresholds(source_groups);
+    }
+
+    // TODO сделать проверку каждой группы
+    // Вспомогательный метод для проверки и коррекции
+    void TextureAnalysis::checkAndAdjustThresholds(std::vector<SourceGroupInfo>& source_groups) {
+        int large_count = 0, medium_count = 0, small_count = 0, fine_count = 0;
+
+        for (const auto& group : source_groups) {
+            switch (group.scale_level) {
+            case ScaleLevel::LARGE: large_count++; break;
+            case ScaleLevel::MEDIUM: medium_count++; break;
+            case ScaleLevel::SMALL: small_count++; break;
+            case ScaleLevel::FINE: fine_count++; break;
+            }
+        }
+
+        // Если более 80% групп в одном уровне, корректируем пороги
+        int total = source_groups.size();
+        if (large_count > total * 0.8f) {
+            std::cout << "Warning: Too many LARGE groups, adjusting thresholds..." << std::endl;
+            large_scale_threshold_ *= 0.7f;
+            medium_scale_threshold_ *= 0.7f;
+            // Переклассифицируем
+            for (auto& group : source_groups) {
+                float size = group.group.getRadialSpread();
+                if (size >= large_scale_threshold_) {
+                    group.scale_level = ScaleLevel::LARGE;
+                }
+                else if (size >= medium_scale_threshold_) {
+                    group.scale_level = ScaleLevel::MEDIUM;
+                }
+                else {
+                    group.scale_level = ScaleLevel::SMALL;
+                }
+            }
+        }
+    }
 
     AnalysisResult TextureAnalysis::analyzeTextureWithSuperpixelsStructured(
         const cv::Mat& input_image,
@@ -300,7 +456,7 @@ namespace EBPTns {
 
         cv::Mat prob_map_display = edge_probability_map;
         prob_map_display.convertTo(prob_map_display, CV_8UC1, 255);
-        ImageDisplay::saveAndShow("probability_map.png", "probability", prob_map_display);
+        //ImageDisplay::saveAndShow("probability_map.png", "probability", prob_map_display);
 
         // Edges
         std::vector<Edge> edges = extractEdgesStructured(input_image, edge_probability_map);
@@ -316,8 +472,8 @@ namespace EBPTns {
 
         // Вычисляем суперпиксели
         cv::Mat superpixel_labels = computeSuperpixels(input_image);
-        cv::Mat sp_visualization = ImageDisplay::visualizeSuperpixels(input_image, superpixel_labels);
-        ImageDisplay::saveAndShow("superpixels_boundaries.png", "Superpixels", sp_visualization);
+        //cv::Mat sp_visualization = ImageDisplay::visualizeSuperpixels(input_image, superpixel_labels);
+        //ImageDisplay::saveAndShow("superpixels_boundaries.png", "Superpixels", sp_visualization);
 
         // Groups
         std::vector<SourceGroupInfo> source_infos;
@@ -356,11 +512,13 @@ namespace EBPTns {
 
         EBPT ebpt_model(input_image);
         cv::Size size = input_image.size();
+        classifySourceGroups(source_infos);
 
         for (auto& group : source_infos) {
             group.mask = getMask(group.group, size, group.hull);
             ebpt_model.addEdgeGroup(group);
         }
+
 
         cv::Mat groups_hull_visualization = ImageDisplay::visualizeGroups(input_image, source_infos);
         ImageDisplay::setPartFinalVisualization(groups_hull_visualization, ImageDisplay::groups);
