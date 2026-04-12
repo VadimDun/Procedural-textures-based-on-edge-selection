@@ -116,7 +116,7 @@ namespace EBPTns {
             cv::Mat patch_part = placed.patch(patch_roi).clone();
 
             // Создание маски
-            cv::Mat binary_mask = cv::Mat::ones(patch_part.size(), CV_8UC1) * 255;
+            cv::Mat binary_mask = cv::Mat::zeros(patch_part.size(), CV_8UC1);
 
             if (!placed.mask.empty() &&
                 placed.mask.cols == placed.patch.cols &&
@@ -125,7 +125,6 @@ namespace EBPTns {
                 cv::threshold(mask_roi, binary_mask, 128, 255, cv::THRESH_BINARY);
             }
             else if (!placed.hull.empty()) {
-                binary_mask = cv::Mat::zeros(patch_part.size(), CV_8UC1);
                 std::vector<cv::Point> local_hull;
                 for (const auto& p : placed.hull) {
                     cv::Point local_p(
@@ -142,20 +141,20 @@ namespace EBPTns {
                     binary_mask = cv::Mat::ones(patch_part.size(), CV_8UC1) * 255;
                 }
             }
-
-            if (cv::countNonZero(binary_mask) == 0) {
+            else {
                 binary_mask = cv::Mat::ones(patch_part.size(), CV_8UC1) * 255;
             }
 
+            if (cv::countNonZero(binary_mask) == 0) {
+                continue;
+            }
+
+            // Проверяем, полностью ли патч виден
             bool is_fully_visible = (patch_left >= 0 && patch_top >= 0 &&
                 patch_right <= size.width && patch_bottom <= size.height);
-            bool use_seamless = is_fully_visible &&
-                patch_part.rows >= 16 && patch_part.cols >= 16;
 
-            //bool use_seamless = (patch_part.rows >= 8 && patch_part.cols >= 8 &&
-            //    binary_mask.rows >= 8 && binary_mask.cols >= 8);
-
-            if (use_seamless) {
+            // Используем seamlessClone ТОЛЬКО для полностью видимых патчей
+            if (is_fully_visible && patch_part.rows >= 16 && patch_part.cols >= 16) {
                 try {
                     cv::Mat result;
                     cv::Mat output_roi = output(target_bbox);
@@ -168,24 +167,46 @@ namespace EBPTns {
                     local_center.x = std::max(0, std::min(local_center.x, target_bbox.width - 1));
                     local_center.y = std::max(0, std::min(local_center.y, target_bbox.height - 1));
 
-                    if (binary_mask.at<uchar>(local_center.y, local_center.x) == 0) {
-                        throw cv::Exception();
-                    }
+                    // Дополнительная проверка центра
+                    if (local_center.x >= 0 && local_center.x < binary_mask.cols &&
+                        local_center.y >= 0 && local_center.y < binary_mask.rows &&
+                        binary_mask.at<uchar>(local_center.y, local_center.x) != 0) {
 
-                    cv::seamlessClone(patch_part, output_roi, binary_mask,
-                        local_center, result, cv::NORMAL_CLONE);
-                    result.copyTo(output(target_bbox));
-                    groups_seamless++;
+                        cv::seamlessClone(patch_part, output_roi, binary_mask,
+                            local_center, result, cv::NORMAL_CLONE);
+                        result.copyTo(output(target_bbox));
+                        groups_seamless++;
+                    }
+                    else {
+                        // Центр не в маске - используем простое копирование
+                        patch_part.copyTo(output(target_bbox), binary_mask);
+                        groups_simple++;
+                    }
                 }
                 catch (const cv::Exception& e) {
-                    //std::cout << "11111111111111111111111111111111111\n";
+                    // При ошибке - простое копирование
                     patch_part.copyTo(output(target_bbox), binary_mask);
                     groups_simple++;
                 }
             }
             else {
-                //std::cout << "222222222222222222222222222222\n";
-                patch_part.copyTo(output(target_bbox), binary_mask);
+                // Для обрезанных патчей - простое копирование с размытой маской (плавный переход)
+                cv::Mat soft_mask;
+                cv::GaussianBlur(binary_mask, soft_mask, cv::Size(21, 21), 15.0);
+
+                // Используем размытую маску для плавного смешивания
+                for (int y = 0; y < patch_part.rows; ++y) {
+                    for (int x = 0; x < patch_part.cols; ++x) {
+                        if (binary_mask.at<uchar>(y, x) > 0) {
+                            float alpha = soft_mask.at<uchar>(y, x) / 255.0f;
+                            cv::Vec3b src = patch_part.at<cv::Vec3b>(y, x);
+                            cv::Vec3b dst = output.at<cv::Vec3b>(target_bbox.y + y, target_bbox.x + x);
+
+                            output.at<cv::Vec3b>(target_bbox.y + y, target_bbox.x + x) =
+                                src * alpha + dst * (1.0f - alpha);
+                        }
+                    }
+                }
                 groups_simple++;
             }
 
@@ -194,7 +215,7 @@ namespace EBPTns {
 
         std::cout << "FillPixels: copied " << groups_copied
             << " groups (seamless: " << groups_seamless
-            << ", simple: " << groups_simple << ")" << std::endl;
+            << ", blended: " << groups_simple << ")" << std::endl;
 
         return output;
     }
