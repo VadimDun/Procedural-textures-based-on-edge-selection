@@ -171,9 +171,9 @@ namespace EBPTns {
                     if (local_center.x >= 0 && local_center.x < binary_mask.cols &&
                         local_center.y >= 0 && local_center.y < binary_mask.rows &&
                         binary_mask.at<uchar>(local_center.y, local_center.x) != 0) {
-
+                        auto clone_mode = placed.scale_level == ScaleLevel::LARGE ? cv::NORMAL_CLONE : cv::MIXED_CLONE;
                         cv::seamlessClone(patch_part, output_roi, binary_mask,
-                            local_center, result, cv::NORMAL_CLONE);
+                            local_center, result, clone_mode);
                         result.copyTo(output(target_bbox));
                         groups_seamless++;
                     }

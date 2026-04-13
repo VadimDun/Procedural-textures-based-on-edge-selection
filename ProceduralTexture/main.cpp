@@ -168,21 +168,12 @@ int main(int argc, char** argv) {
 
     std::vector<PlacedGroup> placed_groups;
     bool hierarchical_enabled = true;
-    if (hierarchical_enabled) {
-        placed_groups = synthesizer.synthesizeHierarchicalPlacement(
-            input_image,
-            source_groups
-        );
-    }
-    else {
-        placed_groups = synthesizer.synthesizePlacement(
-            input_image,
-            source_groups,
-            density,
-            angle_spread,
-            scale
-        );
-    }
+
+    placed_groups = synthesizer.synthesizeHierarchicalPlacement(
+        input_image,
+        source_groups
+    );
+
 
     // Визуализируем размещение
     cv::Mat placement_map = ImageDisplay::drawPlacementMap(
@@ -213,21 +204,11 @@ int main(int argc, char** argv) {
         case 'К':
         case 'r':
         case 'R':
-            if (hierarchical_enabled) {
-                placed_groups = synthesizer.synthesizeHierarchicalPlacement(
-                    input_image,
-                    source_groups
-                );
-            }
-            else {
-                placed_groups = synthesizer.synthesizePlacement(
-                    input_image,
-                    source_groups,
-                    density,
-                    angle_spread,
-                    scale
-                );
-            }
+            placed_groups = synthesizer.synthesizeHierarchicalPlacement(
+                input_image,
+                source_groups
+            );
+
 
             placement_map = ImageDisplay::drawPlacementMap(
                 placed_groups, outSize

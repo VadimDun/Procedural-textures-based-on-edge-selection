@@ -26,24 +26,12 @@ namespace EBPTns {
             }
         };
 
-        // Ќовый метод дл€ иерархического синтеза
         std::vector<PlacedGroup> synthesizeHierarchicalPlacement(
             const cv::Mat& input_image,
             const std::vector<SourceGroupInfo>& source_groups);
 
 
         TextureSynthesis(const cv::Size& size, bool enable_rotation);
-
-        std::vector<PlacedGroup> synthesizePlacement(
-            const cv::Mat& input_image,
-            const std::vector<SourceGroupInfo>& source_groups,
-            float density,
-            float angle_variation,
-            float scale_variation);
-
-        //std::vector<PlacedGroup> synthesizeFromEBPT(
-        //    const EBPT& ebpt_model,
-        //    int output_width, int output_height);
 
         void setRandomSeed(unsigned int seed);
         void setAvoidOverlap(bool avoid) { avoid_overlap_ = avoid; }

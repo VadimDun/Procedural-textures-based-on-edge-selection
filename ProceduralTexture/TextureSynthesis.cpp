@@ -34,30 +34,20 @@ namespace EBPTns {
         // Параметры для мелкого масштаба (детали)
         ScaleLevelParams small_params;
         small_params.density = 1.2f;
-        small_params.base_scale = 0.85f;
+        small_params.base_scale = 1.0f;
         small_params.scale_variation = 0.4f;
         small_params.percent_fill_target = 0.9f;
 
-        // Сверхмелкий масштаб
-        ScaleLevelParams fine_params;
-        fine_params.density = 1.5f;
-        fine_params.base_scale = 1.0f;
-        fine_params.scale_variation = 0.5f;
-        fine_params.percent_fill_target = 0.95f;
-
         if (enable_rotation) {
             large_params.angle_variation = medium_params.angle_variation = small_params.angle_variation = 0.25f;
-            fine_params.angle_variation = 0.5f;
         }
         else {
-            large_params.angle_variation = medium_params.angle_variation = small_params.angle_variation = fine_params.angle_variation = 0.0f;
+            large_params.angle_variation = medium_params.angle_variation = small_params.angle_variation = 0.0f;
         }
 
         scale_params_[ScaleLevel::LARGE] = large_params;
         scale_params_[ScaleLevel::MEDIUM] = medium_params;
         scale_params_[ScaleLevel::SMALL] = small_params;
-        scale_params_[ScaleLevel::FINE] = fine_params;
-
     }
 
     void TextureSynthesis::setRandomSeed(unsigned int seed) {
@@ -212,7 +202,6 @@ namespace EBPTns {
         case ScaleLevel::LARGE:  weight = 0.6f; break;  // Крупные группы дают меньший вес
         case ScaleLevel::MEDIUM: weight = 0.8f; break;
         case ScaleLevel::SMALL:  weight = 1.0f; break;  // Мелкие заполняют полностью
-        case ScaleLevel::FINE:   weight = 1.2f; break;
         }
 
         if (!group.hull.empty()) {
@@ -245,33 +234,29 @@ namespace EBPTns {
 
         float margin;
         switch (level) {
-        case ScaleLevel::LARGE:  margin = 100.0f; break;  // Крупные группы дальше от края
+        case ScaleLevel::LARGE:  margin = 100.0f; break;
         case ScaleLevel::MEDIUM: margin = 50.0f; break;
-        case ScaleLevel::SMALL:  margin = 30.0f; break;
-        default:   margin = 20.0f; break;
+        default: margin = 20.0f; break;
         }
 
-        // Для уровней MEDIUM и SMALL - предпочитаем менее заполненные области
-        if (level != ScaleLevel::LARGE) {
-            // Используем выборку по важности на основе occupancy_map
-            if (!occupancy_map_.empty()) {
-                // Находим области с низкой заполненностью
-                std::vector<cv::Point> low_occupancy_points;
+        // Для всех уровней, кроме LARGE, ищем пустоты
+        if (level != ScaleLevel::LARGE && !occupancy_map_.empty()) {
+            std::vector<cv::Point> low_occupancy_points;
 
-                for (int y = margin; y < outputSize.height - margin; y += margin) {
-                    for (int x = margin; x < outputSize.width - margin; x += margin) {
-                        float occupancy = getOccupancyAtPoint(cv::Point2f(x, y));
-                        if (occupancy < 0.5f) {  // нет другого полигона
-                            low_occupancy_points.push_back(cv::Point(x, y));
-                        }
+            for (int y = margin; y < outputSize.height - margin; y += margin) {
+                for (int x = margin; x < outputSize.width - margin; x += margin) {
+                    float occupancy = getOccupancyAtPoint(cv::Point2f(x, y));
+                    float threshold = 0.5f;
+                    if (occupancy < threshold) { // нет другого полигона
+                        low_occupancy_points.push_back(cv::Point(x, y));
                     }
                 }
+            }
 
-                if (!low_occupancy_points.empty()) {
-                    std::uniform_int_distribution<int> dist(0, low_occupancy_points.size() - 1);
-                    int idx = dist(rng_);
-                    return cv::Point2f(low_occupancy_points[idx].x, low_occupancy_points[idx].y);
-                }
+            if (!low_occupancy_points.empty()) {
+                std::uniform_int_distribution<int> dist(0, low_occupancy_points.size() - 1);
+                int idx = dist(rng_);
+                return cv::Point2f(low_occupancy_points[idx].x, low_occupancy_points[idx].y);
             }
         }
 
@@ -287,32 +272,39 @@ namespace EBPTns {
 
         if (existing_groups.empty()) return false;
 
-        const auto& params = scale_params_.at(current_level);
+        float new_group_area = (float)cv::contourArea(new_group.hull);
+        float total_overlap_area = 0.0f;
 
         for (const auto& existing : existing_groups) {
             ScaleLevel existing_level = existing.scale_level;
 
             if (!new_group.hull.empty() && !existing.hull.empty()) {
                 if (checkHullIntersection(new_group.hull, existing.hull)) {
-                    // Проверяем степень пересечения (площадь пересечения)
                     float intersection_area = computeHullIntersectionArea(new_group.hull, existing.hull);
-                    //std::cout << "\n inter area = " << intersection_area << std::endl;
-                    float new_group_area = (float)cv::contourArea(new_group.hull);
-                    float overlap_ratio = intersection_area / new_group_area;
+                    total_overlap_area += intersection_area;
 
-                    if (current_level != existing_level) {
-                        if (overlap_ratio < 0.3f) {
-                            continue;
+                    // ГРУППЫ ОДНОГО УРОВНЯ - строгий запрет
+                    if (current_level == existing_level) {
+                        float overlap_ratio = intersection_area / new_group_area;
+                        if (overlap_ratio > 0.1f) {
+                            return true;
                         }
                     }
-                    else {
-                        if (overlap_ratio < 0.3f) {
-                            continue;
+                    else if (current_level != existing_level) {
+                        // Разные уровни (LARGE/MEDIUM с SMALL)
+                        float overlap_ratio = intersection_area / new_group_area;
+                        if (overlap_ratio > 0.25f) {
+                            return true;
                         }
                     }
-                    return true;  // Пересечение слишком большое
                 }
             }
+        }
+
+        // Проверка суммарного перекрытия
+        float total_overlap_ratio = total_overlap_area / new_group_area;
+        if (total_overlap_ratio > 0.40f) {
+            return true;
         }
 
         return false;
@@ -430,95 +422,11 @@ namespace EBPTns {
             new_center,
             source_idx,
             scale,
-            angle, 
+            angle,
             source_info.scale_level
         );
 
         return placed_group;
-    }
-
-    std::vector<PlacedGroup> TextureSynthesis::synthesizePlacement(
-        const cv::Mat& input_image,
-        const std::vector<SourceGroupInfo>& source_groups,
-        float density,
-        float angle_variation,
-        float scale_variation) {
-
-        std::vector<PlacedGroup> placed_groups;
-
-        if (source_groups.empty() || outputSize.width <= 0 || outputSize.height <= 0) {
-            std::cerr << "Error: empty source groups or invalid output size" << std::endl;
-            return placed_groups;
-        }
-
-        std::cout << "Synthesizing placement with " << source_groups.size() << " source groups" << std::endl;
-
-        // Рассчитываем количество групп для размещения
-        float area_ratio = static_cast<float>(outputSize.width * outputSize.height) / (512.0f * 512.0f);
-        int target_count = static_cast<int>(source_groups.size() * density * area_ratio * 2.0f);
-        target_count = std::max(3, std::min(target_count, 50));
-
-        std::cout << "Target groups: " << target_count << std::endl;
-
-        // Распределение для выбора исходных групп
-        std::uniform_int_distribution<int> group_dist(0, static_cast<int>(source_groups.size()) - 1);
-
-        int placed_count = 0;
-        int overlap_count = 0;
-        int max_attempts = 1000;
-
-        while (placed_count < target_count && max_attempts > 0) {
-            max_attempts--;
-
-            int source_idx = group_dist(rng_);
-            const SourceGroupInfo& source_info = source_groups[source_idx];
-
-            cv::Point2f position = generateRandomPosition();
-            float angle = generateRandomAngle(angle_variation);
-            float scale = generateRandomScale(1.0f, scale_variation);
-
-            PlacedGroup placed_group = transformGroup(
-                source_info, input_image, source_idx, position, angle, scale);
-
-            if (avoid_overlap_ && placed_count > 0) {
-                bool has_overlap = false;
-
-                // Проверяем пересечение с существующими группами
-                for (const auto& existing : placed_groups) {
-                    // Если у обеих групп есть hull, проверяем пересечение hull
-                    if (!placed_group.hull.empty() && !existing.hull.empty()) {
-                        if (checkHullIntersection(placed_group.hull, existing.hull)) {
-                            has_overlap = true;
-                            break;
-                        }
-                    }
-                    // Если hull нет, используем расстояние между центрами
-                    else {
-                        float dx = placed_group.position.x - existing.position.x;
-                        float dy = placed_group.position.y - existing.position.y;
-                        float distance = std::sqrt(dx * dx + dy * dy);
-                        float min_dist = min_distance_ * (scale + existing.scale_factor) / 2.0f;
-                        if (distance < min_dist) {
-                            has_overlap = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (has_overlap) {
-                    overlap_count++;
-                    continue;
-                }
-            }
-
-            placed_groups.push_back(placed_group);
-            placed_count++;
-        }
-
-        std::cout << "Placed groups: " << placed_groups.size()
-            << " (overlaps skipped: " << overlap_count << ")" << std::endl;
-
-        return placed_groups;
     }
 
     std::vector<PlacedGroup> TextureSynthesis::synthesizeHierarchicalPlacement(
@@ -537,10 +445,9 @@ namespace EBPTns {
 
         // Порядок уровней для размещения
         std::vector<ScaleLevel> order = {
-            ScaleLevel::LARGE,
+            //ScaleLevel::LARGE,
             ScaleLevel::MEDIUM,
-            ScaleLevel::SMALL,
-            ScaleLevel::FINE
+            //ScaleLevel::SMALL
         };
 
         for (ScaleLevel level : order) {
@@ -580,7 +487,7 @@ namespace EBPTns {
 
                 // Трансформируем группу
                 PlacedGroup placed_group = transformGroup(
-                    source_info, input_image, source_idx, position, angle, scale);
+                    source_info, input_image, source_info.group.getIndex(), position, angle, scale);
                 placed_group.scale_level = level;
 
                 // Проверяем перекрытие с уже размещенными группами
@@ -629,7 +536,7 @@ namespace EBPTns {
                         << "%, target: " << (target_fill * 100) << "%" << std::endl;
                 }
 
-                 ImageDisplay::showOccupancyMap(occupancy_map_, "Occupancy after " + scaleLevelToString(level));
+                ImageDisplay::showOccupancyMap(occupancy_map_, "Occupancy after " + scaleLevelToString(level));
             }
 
             std::cout << "  Finished " << scaleLevelToString(level)

@@ -326,9 +326,6 @@ namespace EBPTns {
             large_scale_threshold_ = sorted_sizes[upper_split];
             medium_scale_threshold_ = sorted_sizes[lower_split];
 
-            // Для FINE используем самый маленький размер или порог
-            small_scale_threshold_ = sorted_sizes[0];
-
             std::cout << "Using natural breakpoints strategy:" << std::endl;
         }
         // СТРАТЕГИЯ 2: На основе среднего и стандартного отклонения
@@ -347,7 +344,6 @@ namespace EBPTns {
             // Пороги: mean ± 0.5*std_dev (можно настроить коэффициент)
             large_scale_threshold_ = mean + 0.5f * std_dev;
             medium_scale_threshold_ = mean - 0.5f * std_dev;
-            small_scale_threshold_ = mean - 1.0f * std_dev;
 
             std::cout << "Using statistical thresholds (mean=" << mean
                 << ", std=" << std_dev << "):" << std::endl;
@@ -359,14 +355,12 @@ namespace EBPTns {
 
             large_scale_threshold_ = min_size + range * 0.75f;
             medium_scale_threshold_ = min_size + range * 0.5f;
-            small_scale_threshold_ = min_size + range * 0.25f;
             std::cout << "Using area:" << std::endl;
         }
 
         std::cout << "Scale thresholds: LARGE >= " << large_scale_threshold_
             << ", MEDIUM >= " << medium_scale_threshold_
-            << ", SMALL >= " << small_scale_threshold_
-            << ", FINE < " << small_scale_threshold_ << std::endl;
+            << ", SMALL < " << medium_scale_threshold_ << std::endl;
 
         // Классифицируем каждую группу
         for (auto& group_info : source_groups) {
@@ -378,11 +372,8 @@ namespace EBPTns {
             else if (size >= medium_scale_threshold_) {
                 group_info.scale_level = ScaleLevel::MEDIUM;
             }
-            else if (size >= small_scale_threshold_) {
-                group_info.scale_level = ScaleLevel::SMALL;
-            }
             else {
-                group_info.scale_level = ScaleLevel::FINE;
+                group_info.scale_level = ScaleLevel::SMALL;
             }
 
             std::cout << "Group " << (&group_info - &source_groups[0])
@@ -396,14 +387,13 @@ namespace EBPTns {
     // TODO сделать проверку каждой группы
     // Вспомогательный метод для проверки и коррекции
     void TextureAnalysis::checkAndAdjustThresholds(std::vector<SourceGroupInfo>& source_groups) {
-        int large_count = 0, medium_count = 0, small_count = 0, fine_count = 0;
+        int large_count = 0, medium_count = 0, small_count = 0;
 
         for (const auto& group : source_groups) {
             switch (group.scale_level) {
             case ScaleLevel::LARGE: large_count++; break;
             case ScaleLevel::MEDIUM: medium_count++; break;
             case ScaleLevel::SMALL: small_count++; break;
-            case ScaleLevel::FINE: fine_count++; break;
             }
         }
 
@@ -514,8 +504,10 @@ namespace EBPTns {
         cv::Size size = input_image.size();
         classifySourceGroups(source_infos);
 
+        int cnt = 1;
         for (auto& group : source_infos) {
             group.mask = getMask(group.group, size, group.hull);
+            group.group.setIndex(cnt++);
             ebpt_model.addEdgeGroup(group);
         }
 
@@ -525,7 +517,6 @@ namespace EBPTns {
 
         AnalysisResult result(ebpt_model, superpixel_labels);
 
-        //return AnalysisResult(ebpt_model, superpixel_labels);
         return result;
     }
 

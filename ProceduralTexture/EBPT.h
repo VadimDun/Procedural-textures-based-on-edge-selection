@@ -11,7 +11,6 @@ namespace EBPTns {
         LARGE,
         MEDIUM,
         SMALL,
-        FINE
     };
 
     inline std::string scaleLevelToString(ScaleLevel level) {
@@ -19,7 +18,6 @@ namespace EBPTns {
         case ScaleLevel::LARGE:  return "LARGE";
         case ScaleLevel::MEDIUM: return "MEDIUM";
         case ScaleLevel::SMALL:  return "SMALL";
-        case ScaleLevel::FINE:   return "FINE";
         default: return "UNKNOWN";
         }
     }
