@@ -331,94 +331,164 @@ namespace EBPTns {
         const cv::Point2f& position,
         float angle, float scale) const {
 
-        // Получаем bounding box группы
         cv::Rect source_bbox = source_info.group.getBoundingBox();
-        cv::Point2f group_center = source_info.group.getCenter();
-
-        // Вычисляем центр в локальных координатах bounding box
+        //cv::Rect source_bbox = cv::boundingRect(source_info.hull);
+        cv::Mat original_patch = input_image(source_bbox).clone();
+        
         cv::Point2f local_center(
-            group_center.x - source_bbox.x,
-            group_center.y - source_bbox.y
+            original_patch.cols / 2.0,
+            original_patch.rows / 2.0
         );
 
-        cv::Mat original_patch = input_image(source_bbox).clone();
-
-        cv::Mat original_mask;
-        if (!source_info.mask.empty()) {
-            original_mask = source_info.mask(source_bbox).clone();
-        }
-        else {
-            original_mask = cv::Mat::ones(source_bbox.size(), CV_8UC1) * 255;
-        }
-
+        //Создаем матрицу поворота
         cv::Mat rot_mat = cv::getRotationMatrix2D(local_center, -angle * 180.0 / CV_PI, scale);
 
-        // Вычисляем новый размер после поворота
-        cv::Rect bbox_rotated = cv::RotatedRect(local_center, original_patch.size(), -angle * 180.0 / CV_PI).boundingRect();
+        // Новый bbox после rotation
+        cv::Size scaled_size(
+            std::round(original_patch.cols * scale),
+            std::round(original_patch.rows * scale)
+        );
 
-        // Корректируем матрицу трансформации для сохранения всего содержимого
+        cv::Rect bbox_rotated =
+            cv::RotatedRect(
+                local_center,
+                scaled_size,
+                -angle * 180.0 / CV_PI
+            ).boundingRect();
+
         rot_mat.at<double>(0, 2) += (bbox_rotated.width / 2.0 - local_center.x);
         rot_mat.at<double>(1, 2) += (bbox_rotated.height / 2.0 - local_center.y);
+
+        //rot_mat.at<double>(0, 2) -= bbox_rotated.x;
+        //rot_mat.at<double>(1, 2) -= bbox_rotated.y;
+
+        // Поворачиваем PATCH
 
         cv::Mat transformed_patch;
         cv::warpAffine(original_patch, transformed_patch, rot_mat,
             bbox_rotated.size(),
             cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0));
 
-        cv::Mat transformed_mask;
-        cv::warpAffine(original_mask, transformed_mask, rot_mat,
-            bbox_rotated.size(),
-            cv::INTER_NEAREST, cv::BORDER_CONSTANT, cv::Scalar(0));
+        // Трансформируем hull
 
-        // Бинаризуем маску
-        cv::threshold(transformed_mask, transformed_mask, 128, 255, cv::THRESH_BINARY);
+        std::vector<cv::Point> transformed_hull_local;
 
-        // Вычисляем новый центр в глобальных координатах
+        if (!source_info.hull.empty())
+        {
+            transformed_hull_local.reserve(
+                source_info.hull.size()
+            );
+
+            for (const auto& point : source_info.hull)
+            {
+                cv::Point2f p(
+                    point.x - source_bbox.x,
+                    point.y - source_bbox.y
+                );
+
+                std::vector<cv::Point2f> src{ p };
+                std::vector<cv::Point2f> dst;
+
+                cv::transform(src, dst, rot_mat);
+
+                transformed_hull_local.push_back(
+                    cv::Point(
+                        std::round(dst[0].x),
+                        std::round(dst[0].y)
+                    )
+                );
+            }
+        }
+
+        for (const auto& p : transformed_hull_local)
+        {
+            if (p.x < 0 || p.y < 0)
+            {
+                std::cout << "\nNEGATIVE POINT: " << p;
+            }
+        }
+
+        // Строим mask из hull
+
+        cv::Mat transformed_mask = cv::Mat::zeros(bbox_rotated.size(), CV_8UC1);
+
+        if (transformed_hull_local.size() >= 3)
+        {
+            std::vector<std::vector<cv::Point>> poly{
+                transformed_hull_local
+            };
+
+            cv::fillPoly(transformed_mask, poly, cv::Scalar(255));
+        }
+
+        // Обрезаем лишнее
+
+        if (transformed_hull_local.size() >= 3)
+        {
+            cv::Rect tight_bbox =
+                cv::boundingRect(transformed_hull_local);
+
+            // Ограничиваем bbox границами hull
+            cv::Rect image_rect(
+                0,
+                0,
+                transformed_patch.cols,
+                transformed_patch.rows
+            );
+
+            tight_bbox = tight_bbox & image_rect;
+
+            //std::cout << "\nTIGHT bbox = "
+            //    << tight_bbox.width << "x"
+            //    << tight_bbox.height << std::endl << std::endl;
+
+            transformed_patch = transformed_patch(tight_bbox).clone();
+            transformed_mask = transformed_mask(tight_bbox).clone();
+
+            // Сдвигаем координаты hull
+            for (auto& p : transformed_hull_local)
+            {
+                p.x -= tight_bbox.x;
+                p.y -= tight_bbox.y;
+            }
+
+            bbox_rotated = tight_bbox;
+        }
+
+        // Позиция на output
+
         cv::Point2f new_center(
             position.x,
             position.y
         );
 
-        // Вычисляем смещение для патча (верхний левый угол)
         cv::Point2f patch_offset(
             new_center.x - (bbox_rotated.width / 2.0),
             new_center.y - (bbox_rotated.height / 2.0)
         );
 
-        // Вычисляем hull в глобальных координатах
-        std::vector<cv::Point> transformed_hull;
-        if (!source_info.hull.empty()) {
-            transformed_hull.reserve(source_info.hull.size());
+        // Глобальный hull
 
-            for (const auto& point : source_info.hull) {
-                cv::Point2f p(point.x, point.y);
+        std::vector<cv::Point> transformed_hull_global;
 
-                // Переводим в локальные координаты относительно центра группы
-                p.x -= group_center.x;
-                p.y -= group_center.y;
+        transformed_hull_global.reserve(
+            transformed_hull_local.size()
+        );
 
-                p.x *= scale;
-                p.y *= scale;
-
-                float cos_a = std::cos(angle);
-                float sin_a = std::sin(angle);
-                float rotated_x = p.x * cos_a - p.y * sin_a;
-                float rotated_y = p.x * sin_a + p.y * cos_a;
-
-                rotated_x += new_center.x;
-                rotated_y += new_center.y;
-
-                transformed_hull.push_back(cv::Point(
-                    static_cast<int>(std::round(rotated_x)),
-                    static_cast<int>(std::round(rotated_y))
-                ));
-            }
+        for (const auto& p : transformed_hull_local)
+        {
+            transformed_hull_global.push_back(
+                cv::Point(
+                    p.x + patch_offset.x,
+                    p.y + patch_offset.y
+                )
+            );
         }
 
         PlacedGroup placed_group(
             transformed_patch,
             transformed_mask,
-            transformed_hull,
+            transformed_hull_global,
             new_center,
             source_idx,
             scale,
@@ -445,9 +515,9 @@ namespace EBPTns {
 
         // Порядок уровней для размещения
         std::vector<ScaleLevel> order = {
-            //ScaleLevel::LARGE,
+            ScaleLevel::LARGE,
             ScaleLevel::MEDIUM,
-            //ScaleLevel::SMALL
+            ScaleLevel::SMALL
         };
 
         for (ScaleLevel level : order) {

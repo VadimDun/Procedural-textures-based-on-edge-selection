@@ -454,8 +454,8 @@ namespace EBPTns {
             std::cerr << "Any edge didn't found" << std::endl;
             return AnalysisResult();
         }
-        cv::Mat edges_visualization = ImageDisplay::visualizeEdges(input_image, edges);
-        ImageDisplay::setPartFinalVisualization(edges_visualization, ImageDisplay::edges);
+        //cv::Mat edges_visualization = ImageDisplay::visualizeEdges(input_image, edges);
+        //ImageDisplay::setPartFinalVisualization(edges_visualization, ImageDisplay::edges);
 
         ImageDisplay::visualizeAllChainCodes(edges, input_image, "images/chain_code_debug.png");
         //ImageDisplay::visualizeAnglesOnly(edges, input_image, "images/angles_directions.png");
@@ -509,6 +509,9 @@ namespace EBPTns {
             group.mask = getMask(group.group, size, group.hull);
             group.group.setIndex(cnt++);
             ebpt_model.addEdgeGroup(group);
+            std::string s = "Patch before" + std::to_string(cnt);
+            std::string s1 = "Mask before" + std::to_string(cnt);
+            //ImageDisplay::show(s1, group.mask);
         }
 
 

@@ -101,6 +101,7 @@ int main(int argc, char** argv) {
         analyzer.setSuperpixelParams(regionSize, 10.0f, threshold);
     }
 
+    std::cout << "\n\n---------------------analyzeTextureWithSuperpixelsStructured---------------------\n\n" << std::endl;
     auto result = analyzer.analyzeTextureWithSuperpixelsStructured(input_image, MODEL_PATH);
     if (!result.isValid()) { return 1; }
 
@@ -168,6 +169,7 @@ int main(int argc, char** argv) {
 
     std::vector<PlacedGroup> placed_groups;
     bool hierarchical_enabled = true;
+    std::cout << "\n\n---------------------synthesizeHierarchicalPlacement---------------------\n\n" << std::endl;
 
     placed_groups = synthesizer.synthesizeHierarchicalPlacement(
         input_image,
@@ -185,6 +187,7 @@ int main(int argc, char** argv) {
     PixelSynthesis pixel_synthesis;
     pixel_synthesis.setRandomSeed(123);
 
+    std::cout << "\n\n---------------------fillPixels---------------------\n\n" << std::endl;
     // Заполнение пикселей с масками
     cv::Mat output_texture = pixel_synthesis.fillPixels(
         input_image, source_groups, placed_groups, outSize);

@@ -1,4 +1,5 @@
 #include "PixelSynthesis.h"
+#include "ImageDisplay.h"
 #include <random>
 #include <iostream>
 
@@ -155,6 +156,7 @@ namespace EBPTns {
 
             // Используем seamlessClone ТОЛЬКО для полностью видимых патчей
             if (is_fully_visible && patch_part.rows >= 16 && patch_part.cols >= 16) {
+            //if (true) {
                 try {
                     cv::Mat result;
                     cv::Mat output_roi = output(target_bbox);
@@ -209,6 +211,27 @@ namespace EBPTns {
                 }
                 groups_simple++;
             }
+
+            int i = idx + 1;
+
+            //if (i == 2 || i == 4 || i == 7 || i == 9)
+            //{
+            //    std::cout << "Debug group " << i << ":" << std::endl;
+            //    std::cout << "  position: " << placed.position << std::endl;
+            //    std::cout << "  patch size: " << placed.patch.size() << std::endl;
+            //    std::cout << "  hull size: " << placed.hull.size() << std::endl;
+            //    std::cout << "  patch_left: " << patch_left << ", patch_top: " << patch_top << std::endl;
+            //    std::cout << "  patch_right: " << patch_right << ", patch_bottom: " << patch_bottom << std::endl;
+            //    std::cout << "  target_bbox: " << target_bbox << std::endl;
+            //    std::cout << "  roi: " << roi_x << ", " << roi_y << std::endl;
+            //    std::cout << "  is_fully_visible: " << is_fully_visible << std::endl;
+
+            //    // Сохраняем для визуального контроля
+            //    std::string s = "Patch" + std::to_string(i);
+            //    std::string s1 = "Mask" + std::to_string(i);
+            //    //ImageDisplay::show(s, patch_part);
+            //    ImageDisplay::show(s1, binary_mask);
+            //}
 
             groups_copied++;
         }
