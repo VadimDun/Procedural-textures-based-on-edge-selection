@@ -121,8 +121,24 @@ int main(int argc, char** argv) {
     /////////////////////////////
     cv::Size outSize;
     if (use_real_texture) {
-        outSize.height = input_image.rows * 2;
-        outSize.width = input_image.cols * 2;
+        if (argc > 3) {
+            std::string arg3 = argv[3];
+            std::string arg4 = argv[4];
+            try {
+                int height = std::stoi(arg3);
+                int width = std::stoi(arg4);
+                outSize.height = height;
+                outSize.width = width;
+            }
+            catch (...) {
+                outSize.height = input_image.rows * 2;
+                outSize.width = input_image.cols * 2;
+            }
+        }
+        else {
+            outSize.height = input_image.rows * 2;
+            outSize.width = input_image.cols * 2;
+        }
     }
     else {
         outSize.width = 800;
@@ -183,7 +199,7 @@ int main(int argc, char** argv) {
     cv::Mat placement_map = ImageDisplay::drawPlacementMap(
         placed_groups, outSize
     );
-    ImageDisplay::setPartFinalVisualization(placement_map, ImageDisplay::placement);
+    ImageDisplay::saveAndShowWithSize("placement_map.png", "Placement Map", placement_map, outSize);
 
     // Заполнение пикселей
     PixelSynthesis pixel_synthesis;
@@ -193,7 +209,7 @@ int main(int argc, char** argv) {
     // Заполнение пикселей с масками
     cv::Mat output_texture = pixel_synthesis.fillPixels(
         input_image, source_groups, placed_groups, outSize);
-    ImageDisplay::setPartFinalVisualization(output_texture, ImageDisplay::output);
+    ImageDisplay::saveAndShowWithSize("output_texture.png", "Output Texture", output_texture, outSize);
 
     bool running = true;
     while (running) {

@@ -50,6 +50,7 @@ namespace EBPTns {
         void updateOccupancyMap(const PlacedGroup& group);
         float getOccupancyAtPoint(const cv::Point2f& point) const;
         cv::Point2f generatePositionByLevel(ScaleLevel level);
+        cv::Point findLargestEmptyLocation(float& radius);
         bool checkOverlapByLevel(const PlacedGroup& new_group,
             const std::vector<PlacedGroup>& existing_groups,
             ScaleLevel current_level) const;

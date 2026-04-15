@@ -16,6 +16,13 @@ void ImageDisplay::saveAndShow(const std::string& path, const std::string& nameW
     show(nameWindow, mat);
 }
 
+void ImageDisplay::saveAndShowWithSize(const std::string& path, const std::string& nameWindow, const cv::Mat& mat, const cv::Size& size) {
+    save(path, mat);
+    cv::namedWindow(nameWindow, cv::WINDOW_NORMAL);
+    cv::resizeWindow(nameWindow, size.width / 2, size.height / 2);
+    cv::imshow(nameWindow, mat);
+}
+
 void ImageDisplay::initFinalVisualization() {
     int viz_width = 1200;
     int viz_height = 800;

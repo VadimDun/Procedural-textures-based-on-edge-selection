@@ -18,6 +18,7 @@ public:
     enum PartFinalVis:uchar { input, edges, groups, output, placement};
     static void save(const std::string& path, const cv::Mat& mat);
     static void show(const std::string& nameWindow, const cv::Mat& mat);
+    static void saveAndShowWithSize(const std::string& path, const std::string& nameWindow, const cv::Mat& mat, const cv::Size& size);
     static void saveAndShow(const std::string& path, const std::string& nameWindow, const cv::Mat& mat);
 
     static void initFinalVisualization();

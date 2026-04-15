@@ -262,6 +262,27 @@ namespace EBPTns {
         return cv::Point2f(dist_x(rng_), dist_y(rng_));
     }
 
+    cv::Point TextureSynthesis::findLargestEmptyLocation(float& radius)
+    {
+        cv::Mat inverted;
+        cv::threshold(occupancy_map_, inverted, 10, 255, cv::THRESH_BINARY);
+        cv::bitwise_not(inverted,inverted);
+
+        //ImageDisplay::show("inverted", inverted);
+
+        cv::Mat dist;
+        cv::distanceTransform(inverted, dist, cv::DIST_L2, 5);
+        //ImageDisplay::show("dist", dist);
+
+        double maxVal;
+        cv::Point maxLoc;
+
+        cv::minMaxLoc(dist, nullptr, &maxVal, nullptr, &maxLoc);
+
+        radius = static_cast<float>(maxVal);
+        return maxLoc;
+    }
+
     bool TextureSynthesis::checkOverlapByLevel(
         const PlacedGroup& new_group,
         const std::vector<PlacedGroup>& existing_groups,
@@ -279,18 +300,22 @@ namespace EBPTns {
                 if (checkHullIntersection(new_group.hull, existing.hull)) {
                     float intersection_area = computeHullIntersectionArea(new_group.hull, existing.hull);
                     total_overlap_area += intersection_area;
-
+                    float overlap_ratio = intersection_area / new_group_area;
+                    float overlap_ratio_existing = intersection_area / (float)cv::contourArea(existing.hull);
                     // ГРУППЫ ОДНОГО УРОВНЯ - строгий запрет
                     if (current_level == existing_level) {
-                        float overlap_ratio = intersection_area / new_group_area;
-                        if (overlap_ratio > 0.1f) {
+                        
+                        if (overlap_ratio > 0.1f
+                            //|| overlap_ratio_existing > 0.1f
+                            ) {
                             return true;
                         }
                     }
                     else if (current_level != existing_level) {
                         // Разные уровни (LARGE/MEDIUM с SMALL)
-                        float overlap_ratio = intersection_area / new_group_area;
-                        if (overlap_ratio > 0.25f) {
+                        if (overlap_ratio > 0.25f 
+                            || overlap_ratio_existing > 0.25f
+                            ) {
                             return true;
                         }
                     }
@@ -547,10 +572,30 @@ namespace EBPTns {
                 int source_idx = group_dist(rng_);
                 const SourceGroupInfo& source_info = *level_groups[source_idx];
 
-                cv::Point2f position = generatePositionByLevel(level);
+                cv::Point2f position;
+                float scale;
+
+                if (level == ScaleLevel::SMALL)
+                {
+                    float radius;
+                    position = findLargestEmptyLocation(radius);
+                    //if (radius < 5.0f)
+                    //    break;
+
+                    float desired_size = radius * 2.0f;
+
+                    float base_patch_size = static_cast<float>(source_info.group.getRadialSpread());
+
+                    scale = desired_size / base_patch_size;
+                    scale = std::max(0.3f, std::min(scale, 1.2f));
+                }
+                else
+                {
+                    position = generatePositionByLevel(level);
+                    scale = generateRandomScale(params.base_scale, params.scale_variation);
+                }
 
                 float angle = generateRandomAngle(params.angle_variation);
-                float scale = generateRandomScale(params.base_scale, params.scale_variation);
 
                 // Трансформируем группу
                 PlacedGroup placed_group = transformGroup(
