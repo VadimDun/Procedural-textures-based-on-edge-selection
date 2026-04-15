@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
         analyzer.setGroupingDistance(20);
 
         int regionSize = 120;
-        double threshold = 0.15;
+        double threshold = 0.1;
         analyzer.setSuperpixelParams(regionSize, 10.0f, threshold);
 
     }
@@ -128,6 +128,8 @@ int main(int argc, char** argv) {
         outSize.width = 800;
         outSize.height = 600;
     }
+
+    std::cout << "---------------------------- OUTPUT SIZE=" << outSize << " ---------------------------------------------";
 
     float scale = 0.5f;
     float density = 1.3f;

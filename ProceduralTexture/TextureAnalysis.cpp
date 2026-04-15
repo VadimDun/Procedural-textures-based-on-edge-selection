@@ -376,9 +376,9 @@ namespace EBPTns {
                 group_info.scale_level = ScaleLevel::SMALL;
             }
 
-            std::cout << "Group " << (&group_info - &source_groups[0])
-                << ": size=" << size
-                << ", level=" << scaleLevelToString(group_info.scale_level) << std::endl;
+            //std::cout << "Group " << (&group_info - &source_groups[0])
+            //    << ": size=" << size
+            //    << ", level=" << scaleLevelToString(group_info.scale_level) << std::endl;
         }
 
         checkAndAdjustThresholds(source_groups);

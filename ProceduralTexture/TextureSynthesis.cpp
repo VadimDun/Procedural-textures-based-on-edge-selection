@@ -19,24 +19,21 @@ namespace EBPTns {
     void TextureSynthesis::initScaleLevelParams(bool enable_rotation) {
         // Параметры для крупного масштаба (структура)
         ScaleLevelParams large_params;
-        large_params.density = 0.4f;           // Меньше групп, но крупных
-        large_params.base_scale = 1.2f;
-        large_params.scale_variation = 0.3f;
-        large_params.percent_fill_target = 0.4f;
+        large_params.base_scale = 1.0f;
+        large_params.scale_variation = 0.2f;
+        large_params.percent_fill_target = 0.5f;
 
         // Параметры для среднего масштаба (основная текстура)
         ScaleLevelParams medium_params;
-        medium_params.density = 0.8f;
         medium_params.base_scale = 1.0f;
         medium_params.scale_variation = 0.3f;
-        medium_params.percent_fill_target = 0.7f;
+        medium_params.percent_fill_target = 0.85f;
 
         // Параметры для мелкого масштаба (детали)
         ScaleLevelParams small_params;
-        small_params.density = 1.2f;
         small_params.base_scale = 1.0f;
         small_params.scale_variation = 0.4f;
-        small_params.percent_fill_target = 0.9f;
+        small_params.percent_fill_target = 0.94f;
 
         if (enable_rotation) {
             large_params.angle_variation = medium_params.angle_variation = small_params.angle_variation = 0.25f;
@@ -599,14 +596,14 @@ namespace EBPTns {
                 // Вычисляем текущее заполнение
                 current_fill = cv::countNonZero(occupancy_map_) / (float)(occupancy_map_.total());
 
-                if (placed_count % 10 == 0 ||
-                    std::abs(current_fill - target_fill) < 0.03f) {
-                    std::cout << "  Progress: placed " << placed_count
-                        << " groups, current fill: " << (current_fill * 100)
-                        << "%, target: " << (target_fill * 100) << "%" << std::endl;
-                }
+                //if (placed_count % 10 == 0 ||
+                //    std::abs(current_fill - target_fill) < 0.03f) {
+                //    std::cout << "  Progress: placed " << placed_count
+                //        << " groups, current fill: " << (current_fill * 100)
+                //        << "%, target: " << (target_fill * 100) << "%" << std::endl;
+                //}
 
-                ImageDisplay::showOccupancyMap(occupancy_map_, "Occupancy after " + scaleLevelToString(level));
+                //ImageDisplay::showOccupancyMap(occupancy_map_, "Occupancy after " + scaleLevelToString(level));
             }
 
             std::cout << "  Finished " << scaleLevelToString(level)

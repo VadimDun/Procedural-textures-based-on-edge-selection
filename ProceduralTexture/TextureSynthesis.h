@@ -14,14 +14,13 @@ namespace EBPTns {
     public:
 
         struct ScaleLevelParams {
-            float density;           // Плотность размещения (0-2)
             float base_scale;        // Базовый масштаб патча
             float scale_variation;   // Вариация масштаба
             float angle_variation;   // Вариация масштаба
             float percent_fill_target; // Сколько процентов нужно заполнить
 
             ScaleLevelParams()
-                : density(1.0f), base_scale(1.0f), scale_variation(0.2f),
+                : base_scale(1.0f), scale_variation(0.2f),
                 angle_variation(0.0f), percent_fill_target(0.0f) {
             }
         };

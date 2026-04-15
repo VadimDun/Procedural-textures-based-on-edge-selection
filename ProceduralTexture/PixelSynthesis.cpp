@@ -69,6 +69,8 @@ namespace EBPTns {
         int groups_simple = 0;
 
         for (size_t idx = 0; idx < placed_groups.size(); ++idx) {
+            int i = idx + 1;
+
             const auto& placed = placed_groups[idx];
 
             if (!placed.isValid() || placed.patch.empty()) {
@@ -91,16 +93,34 @@ namespace EBPTns {
                 continue;
             }
 
+            int clipped_width = intersect_right - intersect_left;
+            int clipped_height = intersect_bottom - intersect_top;
+
+            //std::cout << "patch size: << placed.patch.cols
+            //    << " expected width: << clipped_width << std::endl;
+
+            if (clipped_width <= 0 || clipped_height <= 0)
+                continue;
+
+            // ROI внутри patch
+            int roi_x = intersect_left - patch_left;
+            int roi_y = intersect_top - patch_top;
+
+            cv::Rect patch_roi(
+                roi_x,
+                roi_y,
+                clipped_width,
+                clipped_height
+            );
+
+            cv::Mat patch_part = placed.patch(patch_roi).clone();
+
             cv::Rect target_bbox(
                 intersect_left,
                 intersect_top,
-                intersect_right - intersect_left,
-                intersect_bottom - intersect_top
+                clipped_width,
+                clipped_height
             );
-
-            // Вычисляем ROI в патче (область, которую нужно скопировать)
-            int roi_x = intersect_left - patch_left;
-            int roi_y = intersect_top - patch_top;
 
             if (roi_x < 0 || roi_y < 0 ||
                 roi_x + target_bbox.width > placed.patch.cols ||
@@ -112,9 +132,6 @@ namespace EBPTns {
                     << std::endl;
                 continue;
             }
-
-            cv::Rect patch_roi(roi_x, roi_y, target_bbox.width, target_bbox.height);
-            cv::Mat patch_part = placed.patch(patch_roi).clone();
 
             // Создание маски
             cv::Mat binary_mask = cv::Mat::zeros(patch_part.size(), CV_8UC1);
@@ -128,42 +145,49 @@ namespace EBPTns {
             else if (!placed.hull.empty()) {
                 std::vector<cv::Point> local_hull;
                 for (const auto& p : placed.hull) {
-                    cv::Point local_p(
-                        p.x - target_bbox.x,
-                        p.y - target_bbox.y
-                    );
-                    local_hull.push_back(local_p);
+
+                    // координаты hull внутри исходного patch
+                    int patch_local_x = p.x - patch_left;
+                    int patch_local_y = p.y - patch_top;
+
+                    // учитываем clipping
+                    int clipped_x = patch_local_x - roi_x;
+                    int clipped_y = patch_local_y - roi_y;
+
+                    // проверяем, что точка внутри patch_part
+                    if (clipped_x >= 0 && clipped_x < patch_part.cols &&
+                        clipped_y >= 0 && clipped_y < patch_part.rows)
+                    {
+                        local_hull.emplace_back(clipped_x, clipped_y);
+                    }
                 }
+
                 if (local_hull.size() >= 3) {
                     std::vector<std::vector<cv::Point>> hull_contour = { local_hull };
                     cv::fillPoly(binary_mask, hull_contour, cv::Scalar(255));
                 }
                 else {
-                    binary_mask = cv::Mat::ones(patch_part.size(), CV_8UC1) * 255;
+                    binary_mask.setTo(255);
                 }
             }
             else {
-                binary_mask = cv::Mat::ones(patch_part.size(), CV_8UC1) * 255;
+                binary_mask.setTo(255);
             }
 
             if (cv::countNonZero(binary_mask) == 0) {
                 continue;
             }
 
-            // Проверяем, полностью ли патч виден
-            bool is_fully_visible = (patch_left >= 0 && patch_top >= 0 &&
-                patch_right <= size.width && patch_bottom <= size.height);
-
-            // Используем seamlessClone ТОЛЬКО для полностью видимых патчей
-            if (is_fully_visible && patch_part.rows >= 16 && patch_part.cols >= 16) {
+            // С маленькими ошибка вылетает
+            if (patch_part.rows >= 6 && patch_part.cols >= 6) {
             //if (true) {
                 try {
                     cv::Mat result;
                     cv::Mat output_roi = output(target_bbox);
-
+                    //if (i == 3) ImageDisplay::show("output_roi", output_roi);
                     cv::Point local_center(
-                        static_cast<int>(placed.position.x - target_bbox.x),
-                        static_cast<int>(placed.position.y - target_bbox.y)
+                        static_cast<int>(clipped_width / 2),
+                        static_cast<int>(clipped_height / 2)
                     );
 
                     local_center.x = std::max(0, std::min(local_center.x, target_bbox.width - 1));
@@ -173,10 +197,13 @@ namespace EBPTns {
                     if (local_center.x >= 0 && local_center.x < binary_mask.cols &&
                         local_center.y >= 0 && local_center.y < binary_mask.rows &&
                         binary_mask.at<uchar>(local_center.y, local_center.x) != 0) {
-                        auto clone_mode = placed.scale_level == ScaleLevel::LARGE ? cv::NORMAL_CLONE : cv::MIXED_CLONE;
+                        auto clone_mode = placed.scale_level == ScaleLevel::SMALL ? cv::MIXED_CLONE : cv::NORMAL_CLONE;
                         cv::seamlessClone(patch_part, output_roi, binary_mask,
                             local_center, result, clone_mode);
+
                         result.copyTo(output(target_bbox));
+                        //if (i == 3) { ImageDisplay::show("output", output); ImageDisplay::show("result", result);}
+
                         groups_seamless++;
                     }
                     else {
@@ -189,6 +216,27 @@ namespace EBPTns {
                     // При ошибке - простое копирование
                     patch_part.copyTo(output(target_bbox), binary_mask);
                     groups_simple++;
+                    if (i == 3) 
+                    {
+                        // Вывод отладочной информации
+                        std::cout << "CV Exception caught for group " << i << ":" << std::endl;
+                        std::cout << "  Exception: " << e.what() << std::endl;
+                        std::cout << "  target_bbox: " << target_bbox << std::endl;
+                        std::cout << "  binary_mask size: " << binary_mask.cols
+                            << "x" << binary_mask.rows << std::endl;
+                        std::cout << "  patch_part size: " << patch_part.cols
+                            << "x" << patch_part.rows << std::endl;
+                        std::cout << " intersect_left=" << intersect_left
+                            << " intersect_right=" << intersect_right
+                            << "\n intersect_top=" << intersect_top
+                            << " intersect_bottom=" << intersect_bottom
+                            << "\n clipped_width=" << clipped_width
+                            << " clipped_height=" << clipped_height
+                            << "\n roi_x=" << roi_x
+                            << " roi_y=" << roi_y << std::endl << std::endl;
+                        std::cout << "  patch_left: " << patch_left << ", patch_top: " << patch_top << std::endl;
+                        std::cout << "  patch_right: " << patch_right << ", patch_bottom: " << patch_bottom << std::endl;
+                    }
                 }
             }
             else {
@@ -210,11 +258,10 @@ namespace EBPTns {
                     }
                 }
                 groups_simple++;
+                std::cout << i <<" patch_part.rows=" << patch_part.rows << " patch_part.cols=" << patch_part.cols << std::endl;
             }
 
-            int i = idx + 1;
-
-            //if (i == 2 || i == 4 || i == 7 || i == 9)
+            //if (i == 3)
             //{
             //    std::cout << "Debug group " << i << ":" << std::endl;
             //    std::cout << "  position: " << placed.position << std::endl;
@@ -223,14 +270,19 @@ namespace EBPTns {
             //    std::cout << "  patch_left: " << patch_left << ", patch_top: " << patch_top << std::endl;
             //    std::cout << "  patch_right: " << patch_right << ", patch_bottom: " << patch_bottom << std::endl;
             //    std::cout << "  target_bbox: " << target_bbox << std::endl;
-            //    std::cout << "  roi: " << roi_x << ", " << roi_y << std::endl;
-            //    std::cout << "  is_fully_visible: " << is_fully_visible << std::endl;
+            //    std::cout << "  roi: " << roi_x << ", " << roi_y << std::endl
+            //        << "=======================================" << std::endl << std::endl;
 
             //    // Сохраняем для визуального контроля
-            //    std::string s = "Patch" + std::to_string(i);
-            //    std::string s1 = "Mask" + std::to_string(i);
+            //    std::string s = "Patch_part" + std::to_string(i);
+            //    std::string s1 = "Mask_part" + std::to_string(i);
+            //    std::string ss = "Patch" + std::to_string(i);
+            //    std::string ss1 = "Mask" + std::to_string(i);
             //    //ImageDisplay::show(s, patch_part);
+            //    ImageDisplay::show(s, patch_part);
             //    ImageDisplay::show(s1, binary_mask);
+            //    ImageDisplay::show(ss, placed.patch);
+            //    ImageDisplay::show(ss1, placed.mask);
             //}
 
             groups_copied++;
