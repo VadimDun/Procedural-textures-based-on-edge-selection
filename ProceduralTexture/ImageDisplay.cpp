@@ -214,7 +214,7 @@ cv::Mat ImageDisplay::visualizeGroups(const cv::Mat& image, const std::vector<So
         cv::arrowedLine(visualization, start_point, end_point,
             cv::Scalar(0, 255, 255), 2, cv::LINE_AA, 0, 0.3);
 
-        std::string angle_text = std::to_string(static_cast<int>(angle * 180 / CV_PI)) + "°";
+        std::string angle_text = std::to_string(static_cast<int>(angle * 180 / CV_PI)) + "deg";
         cv::putText(visualization, angle_text,
             cv::Point(static_cast<int>(group_center.x + 15), static_cast<int>(group_center.y - 15)),
             cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
@@ -239,7 +239,8 @@ cv::Mat ImageDisplay::visualizeGroups(const cv::Mat& image, const std::vector<So
             cv::Rect bbox = cv::boundingRect(hull);
             std::string label = "G" + std::to_string(group_idx + 1);
             cv::putText(visualization, label,
-                cv::Point(bbox.x, bbox.y - 5),
+                cv::Point(group_center.x, group_center.y - 5),
+                //cv::Point(bbox.x, bbox.y - 5),
                 cv::FONT_HERSHEY_SIMPLEX, 0.5,
                 color, 2);
         }
@@ -529,7 +530,7 @@ cv::Mat ImageDisplay::drawPlacementMap(
             std::string info = "G" + std::to_string(placed.source_index) +
                 " A:" + std::to_string(static_cast<int>(placed.rotation_angle * 180.0 / CV_PI)) + "deg";
             cv::putText(placement_map, info,
-                cv::Point(bbox.x, bbox.y - 5),
+                cv::Point(center.x, center.y - 20),
                 cv::FONT_HERSHEY_SIMPLEX, 0.4,
                 color, 1);
         }
@@ -552,7 +553,7 @@ cv::Mat ImageDisplay::drawPlacementMap(
         // Номер группы
         std::string label = std::to_string(i + 1);
         cv::putText(placement_map, label,
-            cv::Point(center.x + 10, center.y - 10),
+            cv::Point(center.x + 10, center.y - 5),
             cv::FONT_HERSHEY_SIMPLEX, 0.5,
             cv::Scalar(255, 255, 255), 2);
     }
@@ -565,6 +566,15 @@ cv::Mat ImageDisplay::drawPlacementMap(
         cv::Scalar(255, 255, 255), 2);
 
     return placement_map;
+}
+
+void ImageDisplay::showOccupancyMap(const cv::Mat& occupancy_map, const std::string& title) {
+    if (occupancy_map.empty()) return;
+
+    cv::Mat display;
+    cv::applyColorMap(occupancy_map, display, cv::COLORMAP_JET);
+    show(title, display);
+    cv::waitKey(1);
 }
 
 void ImageDisplay::drawArrow(cv::Mat& img, const cv::Point& end, float angle, const cv::Scalar& color) {

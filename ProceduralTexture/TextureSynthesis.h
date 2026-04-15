@@ -10,22 +10,27 @@
 
 namespace EBPTns {
 
-
-
     class TextureSynthesis {
     public:
-        TextureSynthesis(const cv::Size& size);
 
-        std::vector<PlacedGroup> synthesizePlacement(
+        struct ScaleLevelParams {
+            float base_scale;        // Базовый масштаб патча
+            float scale_variation;   // Вариация масштаба
+            float angle_variation;   // Вариация масштаба
+            float percent_fill_target; // Сколько процентов нужно заполнить
+
+            ScaleLevelParams()
+                : base_scale(1.0f), scale_variation(0.2f),
+                angle_variation(0.0f), percent_fill_target(0.0f) {
+            }
+        };
+
+        std::vector<PlacedGroup> synthesizeHierarchicalPlacement(
             const cv::Mat& input_image,
-            const std::vector<SourceGroupInfo>& source_groups,
-            float density,
-            float angle_variation,
-            float scale_variation);
+            const std::vector<SourceGroupInfo>& source_groups);
 
-        //std::vector<PlacedGroup> synthesizeFromEBPT(
-        //    const EBPT& ebpt_model,
-        //    int output_width, int output_height);
+
+        TextureSynthesis(const cv::Size& size, bool enable_rotation);
 
         void setRandomSeed(unsigned int seed);
         void setAvoidOverlap(bool avoid) { avoid_overlap_ = avoid; }
@@ -38,8 +43,24 @@ namespace EBPTns {
         float min_distance_ = 30.0f;
         cv::Size outputSize;
 
+        std::map<ScaleLevel, ScaleLevelParams> scale_params_;
+        cv::Mat occupancy_map_;  // Карта заполнения
+
+        // Вспомогательные методы
+        void updateOccupancyMap(const PlacedGroup& group);
+        float getOccupancyAtPoint(const cv::Point2f& point) const;
+        cv::Point2f generatePositionByLevel(ScaleLevel level);
+        bool checkOverlapByLevel(const PlacedGroup& new_group,
+            const std::vector<PlacedGroup>& existing_groups,
+            ScaleLevel current_level) const;
+        void initScaleLevelParams(bool enable_rotation);
+        float computeHullIntersectionArea(
+            const std::vector<cv::Point>& hull1,
+            const std::vector<cv::Point>& hull2) const;
+
+
         cv::Point2f generateRandomPosition();
-        float generateRandomAngle(float base_angle, float variation);
+        float generateRandomAngle(float variation);
         float generateRandomScale(float base_scale, float variation);
 
         bool checkOverlap(const EdgeGroup& group1,

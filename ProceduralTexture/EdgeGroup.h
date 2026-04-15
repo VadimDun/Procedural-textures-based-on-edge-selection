@@ -15,6 +15,9 @@ namespace EBPTns {
         void calculateStatistics();
         void addEdge(const Edge& edge);
 
+        size_t getIndex() const { return index; }
+        void setIndex(size_t idx) { index = idx; }
+
         const std::vector<Edge>& getEdges() const { return edges_; }
         cv::Point2f getCenter() const { return center_; }
         float getAverageAngle() const { return avg_angle_; }
@@ -32,6 +35,7 @@ namespace EBPTns {
         cv::Point2f center_;         
         float avg_angle_ = 0.0f;     
         float radial_spread_ = 0.0f; 
+        size_t index;
 
         void calculateGroupCenter();
         void calculateAverageAngle();
