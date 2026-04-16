@@ -212,6 +212,10 @@ namespace EBPTns {
         }
     }
 
+    inline void TextureSynthesis::erodeOccupancyMap(int width) {
+        cv::erode(occupancy_map_, occupancy_map_, cv::Mat(), cv::Point(-1, -1), width);
+    }
+
     float TextureSynthesis::getOccupancyAtPoint(const cv::Point2f& point) const {
         if (occupancy_map_.empty()) return 0.0f;
 
@@ -304,9 +308,10 @@ namespace EBPTns {
                     float overlap_ratio_existing = intersection_area / (float)cv::contourArea(existing.hull);
                     // ГРУППЫ ОДНОГО УРОВНЯ - строгий запрет
                     if (current_level == existing_level) {
-                        
-                        if (overlap_ratio > 0.1f
-                            //|| overlap_ratio_existing > 0.1f
+                        float th = 0.2f;
+                        if (current_level == ScaleLevel::SMALL) th = 0.1f;
+                        if (overlap_ratio > th
+                            //|| overlap_ratio_existing > th
                             ) {
                             return true;
                         }
@@ -325,7 +330,10 @@ namespace EBPTns {
 
         // Проверка суммарного перекрытия
         float total_overlap_ratio = total_overlap_area / new_group_area;
-        if (total_overlap_ratio > 0.40f) {
+
+        float total_th = 0.6f;
+        if (current_level == ScaleLevel::SMALL) total_th = 0.4f;
+        if (total_overlap_ratio > total_th) {
             return true;
         }
 
@@ -551,6 +559,13 @@ namespace EBPTns {
                 continue;
             }
 
+            if (level == ScaleLevel::MEDIUM) {
+                erodeOccupancyMap(20);                               
+            }
+            else if (level == ScaleLevel::SMALL) {
+                erodeOccupancyMap(3);
+            }
+
             const auto& level_groups = groups_by_level[level];
             const auto& params = scale_params_[level];
 
@@ -572,13 +587,12 @@ namespace EBPTns {
             while (current_fill < target_fill && total_attempts < MAX_TOTAL_ATTEMPTS) {
                 total_attempts++;
 
-                int source_idx = group_dist(rng_);
-                const SourceGroupInfo& source_info = *level_groups[source_idx];
+                const SourceGroupInfo* source_info;
 
                 cv::Point2f position;
                 float scale;
 
-                if (level == ScaleLevel::SMALL)
+                if (level != ScaleLevel::LARGE)
                 {
                     float radius;
                     position = findLargestEmptyLocation(radius);
@@ -587,13 +601,40 @@ namespace EBPTns {
 
                     float desired_size = radius * 2.0f;
 
-                    float base_patch_size = static_cast<float>(source_info.group.getRadialSpread());
+                    int best_idx = 0;
+                    float best_diff = 1e9f;
+
+                    for (int i = 0; i < level_groups.size(); i++)
+                    {
+                        float group_size =
+                            level_groups[i]->group.getRadialSpread();
+
+                        float diff = std::abs(group_size - desired_size);
+
+                        if (diff < best_diff)
+                        {
+                            best_diff = diff;
+                            best_idx = i;
+                        }
+                    }
+
+                    if (1.3 * level_groups[0]->group.getRadialSpread() < radius) {
+                        best_idx = group_dist(rng_);
+                    }
+
+                    source_info = level_groups[best_idx];
+
+
+                    float base_patch_size = static_cast<float>(source_info->group.getRadialSpread());
 
                     scale = desired_size / base_patch_size;
                     scale = std::max(0.3f, std::min(scale, 1.2f));
                 }
                 else
                 {
+                    int source_idx = group_dist(rng_);
+                    source_info = level_groups[source_idx];
+
                     position = generatePositionByLevel(level);
                     scale = generateRandomScale(params.base_scale, params.scale_variation);
                 }
@@ -602,7 +643,7 @@ namespace EBPTns {
 
                 // Трансформируем группу
                 PlacedGroup placed_group = transformGroup(
-                    source_info, input_image, source_info.group.getIndex(), position, angle, scale);
+                    *source_info, input_image, source_info->group.getIndex(), position, angle, scale);
                 if (placed_group.source_index == -1) continue;
 
                 placed_group.scale_level = level;
@@ -612,7 +653,7 @@ namespace EBPTns {
                 if (!all_placed_groups.empty()) {
                     if (checkOverlapByLevel(placed_group, all_placed_groups, level)) {
                         overlap_count++;
-                        has_overlap = true;
+                        //has_overlap = true;
                     }
                 }
 
@@ -643,7 +684,7 @@ namespace EBPTns {
                 //        << "%, target: " << (target_fill * 100) << "%" << std::endl;
                 //}
 
-                //ImageDisplay::showOccupancyMap(occupancy_map_, "Occupancy after " + scaleLevelToString(level));
+                ImageDisplay::showOccupancyMap(occupancy_map_, "Occupancy after " + scaleLevelToString(level));
             }
 
             std::cout << "  Finished " << scaleLevelToString(level)

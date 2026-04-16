@@ -147,9 +147,10 @@ namespace EBPTns {
             if (cv::countNonZero(binary_mask) == 0) {
                 continue;
             }
-            bool isSmall = (patch_part.rows < 40 || patch_part.cols < 40);
+
+            int small_threshold = 30;
+            bool isSmall = (patch_part.rows < small_threshold || patch_part.cols < small_threshold);
             //bool isSmall = placed.scale_level == ScaleLevel::SMALL;
-            // С маленькими ошибка вылетает
             if (!isSmall) {
             //if (true) {
                 try {

@@ -93,10 +93,6 @@ namespace EBPTns {
             edges.push_back(edge);
         }
 
-        std::sort(edges.begin(), edges.end(),
-            [](const auto& a, const auto& b) {
-                return a.getLength() > b.getLength();
-            });
         return edges;
     }
 
@@ -500,9 +496,14 @@ namespace EBPTns {
         // Создаем композитное изображение: исходное + суперпиксели + ребра
         //ImageDisplay::visualiseSPWithEdges(input_image, sp_visualization, edges_visualization);
 
+        std::sort(source_infos.begin(), source_infos.end(),
+        [](const SourceGroupInfo& a, const SourceGroupInfo& b) {
+            return a.group.getRadialSpread() > b.group.getRadialSpread();
+        });
+        classifySourceGroups(source_infos);
+
         EBPT ebpt_model(input_image);
         cv::Size size = input_image.size();
-        classifySourceGroups(source_infos);
 
         int cnt = 1;
         for (auto& group : source_infos) {

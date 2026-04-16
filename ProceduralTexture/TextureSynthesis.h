@@ -49,6 +49,7 @@ namespace EBPTns {
 
         // Вспомогательные методы
         void updateOccupancyMap(const PlacedGroup& group);
+        void erodeOccupancyMap(int width);
         float getOccupancyAtPoint(const cv::Point2f& point) const;
         cv::Point2f generatePositionByLevel(ScaleLevel level);
         cv::Point findLargestEmptyLocation(float& radius);
