@@ -203,7 +203,6 @@ int main(int argc, char** argv) {
 
     // Заполнение пикселей
     PixelSynthesis pixel_synthesis;
-    pixel_synthesis.setRandomSeed(123);
 
     std::cout << "\n\n---------------------fillPixels---------------------\n\n" << std::endl;
     // Заполнение пикселей с масками
@@ -250,7 +249,6 @@ int main(int argc, char** argv) {
         {
             unsigned int new_seed = std::random_device{}();
             synthesizer.setRandomSeed(new_seed);
-            pixel_synthesis.setRandomSeed(new_seed);
         }
         break;
 

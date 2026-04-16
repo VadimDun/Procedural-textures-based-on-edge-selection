@@ -5,53 +5,23 @@
 
 namespace EBPTns {
 
-    PixelSynthesis::PixelSynthesis() {
-        std::random_device rd;
-        rng_ = std::mt19937(rd());
-    }
+    void PixelSynthesis::GaussianCopy(const cv::Mat& binary_mask, const cv::Mat& patch_part, cv::Mat& output, const cv::Rect& target_bbox) {
+        cv::Mat soft_mask;
+        cv::GaussianBlur(binary_mask, soft_mask, cv::Size(21, 21), 15.0);
 
-    void PixelSynthesis::setRandomSeed(unsigned int seed) {
-        rng_.seed(seed);
-    }
+        // Используем размытую маску для плавного смешивания
+        for (int y = 0; y < patch_part.rows; ++y) {
+            for (int x = 0; x < patch_part.cols; ++x) {
+                if (binary_mask.at<uchar>(y, x) > 0) {
+                    float alpha = soft_mask.at<uchar>(y, x) / 255.0f;
+                    cv::Vec3b src = patch_part.at<cv::Vec3b>(y, x);
+                    cv::Vec3b dst = output.at<cv::Vec3b>(target_bbox.y + y, target_bbox.x + x);
 
-    void PixelSynthesis::blendPatches(cv::Mat& output, const cv::Mat& patch,
-        const cv::Rect& bbox, float alpha) {
-        if (patch.empty() || output.empty() ||
-            bbox.width <= 0 || bbox.height <= 0 ||
-            bbox.x < 0 || bbox.y < 0 ||
-            bbox.x + bbox.width > output.cols ||
-            bbox.y + bbox.height > output.rows) {
-            return;
-        }
-        if (alpha >= 0.99f) {
-            patch.copyTo(output(bbox));
-        }
-        else {
-            cv::Mat roi = output(bbox);
-            cv::addWeighted(patch, alpha, roi, 1.0f - alpha, 0, roi);
-        }
-    }
-
-    cv::Mat PixelSynthesis::copyWithMask(const cv::Mat& source, const cv::Mat& mask,
-        const cv::Rect& source_bbox, const cv::Rect& target_bbox) {
-        cv::Mat result = cv::Mat::zeros(target_bbox.size(), source.type());
-
-        for (int y = 0; y < target_bbox.height; ++y) {
-            for (int x = 0; x < target_bbox.width; ++x) {
-                int source_x = source_bbox.x + x;
-                int source_y = source_bbox.y + y;
-
-                if (source_x >= 0 && source_x < source.cols &&
-                    source_y >= 0 && source_y < source.rows) {
-
-                    if (mask.empty() || mask.at<uchar>(source_y, source_x) > 0) {
-                        result.at<cv::Vec3b>(y, x) = source.at<cv::Vec3b>(source_y, source_x);
-                    }
+                    output.at<cv::Vec3b>(target_bbox.y + y, target_bbox.x + x) =
+                        src * alpha + dst * (1.0f - alpha);
                 }
             }
         }
-
-        return result;
     }
 
     cv::Mat PixelSynthesis::fillPixels(
@@ -177,9 +147,10 @@ namespace EBPTns {
             if (cv::countNonZero(binary_mask) == 0) {
                 continue;
             }
-
+            bool isSmall = (patch_part.rows < 40 || patch_part.cols < 40);
+            //bool isSmall = placed.scale_level == ScaleLevel::SMALL;
             // С маленькими ошибка вылетает
-            if (patch_part.rows >= 6 && patch_part.cols >= 6) {
+            if (!isSmall) {
             //if (true) {
                 try {
                     cv::Mat result;
@@ -197,10 +168,9 @@ namespace EBPTns {
                     if (local_center.x >= 0 && local_center.x < binary_mask.cols &&
                         local_center.y >= 0 && local_center.y < binary_mask.rows &&
                         binary_mask.at<uchar>(local_center.y, local_center.x) != 0) {
+                        //std::cout << scaleLevelToString(placed.scale_level);
                         auto clone_mode = placed.scale_level == ScaleLevel::SMALL ? cv::MIXED_CLONE : cv::NORMAL_CLONE;
-                        cv::seamlessClone(patch_part, output_roi, binary_mask,
-                            local_center, result, clone_mode);
-
+                        cv::seamlessClone(patch_part, output_roi, binary_mask, local_center, result, clone_mode);
                         result.copyTo(output(target_bbox));
                         //if (i == 3) { ImageDisplay::show("output", output); ImageDisplay::show("result", result);}
 
@@ -208,13 +178,13 @@ namespace EBPTns {
                     }
                     else {
                         // Центр не в маске - используем простое копирование
-                        patch_part.copyTo(output(target_bbox), binary_mask);
+                        GaussianCopy(binary_mask, patch_part, output, target_bbox);
                         groups_simple++;
                     }
                 }
                 catch (const cv::Exception& e) {
-                    // При ошибке - простое копирование
-                    patch_part.copyTo(output(target_bbox), binary_mask);
+                    // При ошибке - копирование
+                    GaussianCopy(binary_mask, patch_part, output, target_bbox);
                     groups_simple++;
                     if (i == 3) 
                     {
@@ -241,22 +211,7 @@ namespace EBPTns {
             }
             else {
                 // Для обрезанных патчей - простое копирование с размытой маской (плавный переход)
-                cv::Mat soft_mask;
-                cv::GaussianBlur(binary_mask, soft_mask, cv::Size(21, 21), 15.0);
-
-                // Используем размытую маску для плавного смешивания
-                for (int y = 0; y < patch_part.rows; ++y) {
-                    for (int x = 0; x < patch_part.cols; ++x) {
-                        if (binary_mask.at<uchar>(y, x) > 0) {
-                            float alpha = soft_mask.at<uchar>(y, x) / 255.0f;
-                            cv::Vec3b src = patch_part.at<cv::Vec3b>(y, x);
-                            cv::Vec3b dst = output.at<cv::Vec3b>(target_bbox.y + y, target_bbox.x + x);
-
-                            output.at<cv::Vec3b>(target_bbox.y + y, target_bbox.x + x) =
-                                src * alpha + dst * (1.0f - alpha);
-                        }
-                    }
-                }
+                GaussianCopy(binary_mask, patch_part, output, target_bbox);
                 groups_simple++;
                 std::cout << i <<" patch_part.rows=" << patch_part.rows << " patch_part.cols=" << patch_part.cols << std::endl;
             }

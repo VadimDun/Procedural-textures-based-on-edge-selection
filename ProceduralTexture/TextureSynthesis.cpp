@@ -477,6 +477,9 @@ namespace EBPTns {
             bbox_rotated = tight_bbox;
         }
 
+        if (cv::countNonZero(transformed_mask) < MIN_SIZE_PATCH)
+            return PlacedGroup();
+
         // Позиция на output
 
         cv::Point2f new_center(
@@ -600,6 +603,8 @@ namespace EBPTns {
                 // Трансформируем группу
                 PlacedGroup placed_group = transformGroup(
                     source_info, input_image, source_info.group.getIndex(), position, angle, scale);
+                if (placed_group.source_index == -1) continue;
+
                 placed_group.scale_level = level;
 
                 // Проверяем перекрытие с уже размещенными группами
@@ -623,16 +628,6 @@ namespace EBPTns {
 
                 // Сброс при успешном размещении
                 overlap_count = 0;
-
-                // Проверяем, что группа не слишком близко к границе
-                if (position.x - placed_group.patch.cols / 2 < 0 ||
-                    position.y - placed_group.patch.rows / 2 < 0 ||
-                    position.x + placed_group.patch.cols / 2 > outputSize.width ||
-                    position.y + placed_group.patch.rows / 2 > outputSize.height) {
-                    if (placed_count % 20 == 0) {
-                        std::cout << "  Group " << placed_count << " near boundary" << std::endl;
-                    }
-                }
 
                 all_placed_groups.push_back(placed_group);
                 updateOccupancyMap(placed_group);

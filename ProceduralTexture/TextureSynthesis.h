@@ -41,6 +41,7 @@ namespace EBPTns {
 
         bool avoid_overlap_ = true;
         float min_distance_ = 30.0f;
+        const int MIN_SIZE_PATCH = 300;
         cv::Size outputSize;
 
         std::map<ScaleLevel, ScaleLevelParams> scale_params_;

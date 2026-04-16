@@ -7,7 +7,7 @@
 
 namespace EBPTns {
 
-    enum class ScaleLevel {
+    enum class ScaleLevel: uint8_t {
         LARGE,
         MEDIUM,
         SMALL,
