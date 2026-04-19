@@ -39,7 +39,7 @@ namespace EBPTns {
         }
     }
 
-    std::vector<Edge> TextureAnalysis::extractEdgesStructured(const cv::Mat& image, cv::Mat edge_probability_map) {
+    std::vector<Edge> TextureAnalysis::extractEdges(const cv::Mat& image, cv::Mat edge_probability_map) {
         std::vector<Edge> edges;
 
         if (image.empty()) {
@@ -48,8 +48,8 @@ namespace EBPTns {
         }
 
         if (!is_structured_initialized_) {
-            std::cerr << "TextureAnalysis::extractEdgesStructured: StructuredEdgeDetection didn't created "
-                << "Firstly call analyzeTextureStructured or initializeStructuredDetector" << std::endl;
+            std::cerr << "TextureAnalysis::extractEdges: StructuredEdgeDetection didn't created "
+                << "Firstly call extractEdges or initializeStructuredDetector" << std::endl;
             return edges;
         }
 
@@ -82,48 +82,6 @@ namespace EBPTns {
             edges.push_back(edge);
         }
 
-        return edges;
-    }
-
-    std::vector<Edge> TextureAnalysis::extractEdges(const cv::Mat& image) {
-        std::vector<Edge> edges;
-        if (image.empty()) {
-            return edges;
-        }
-        cv::Mat gray;
-        if (image.channels() == 3) {
-            cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
-        }
-        else {
-            gray = image.clone();
-        }
-        cv::Mat blurred;
-        cv::GaussianBlur(gray, blurred, cv::Size(5, 5), 1.5);
-        cv::Mat edges_image;
-        cv::Canny(blurred, edges_image,
-            canny_low_threshold_,
-            canny_high_threshold_);
-        auto contours = findContours(edges_image);
-        for (const auto& contour : contours) {
-            if (contour.size() < min_edge_length_) continue;
-            //auto& simplified = contour;
-            //float length = 0;
-            //for (size_t i = 1; i < simplified.size(); ++i) {
-            //    float dx = simplified[i].x - simplified[i - 1].x;
-            //    float dy = simplified[i].y - simplified[i - 1].y;
-            //    length += std::sqrt(dx * dx + dy * dy);
-            //}
-            //if (length < min_edge_length_) {
-            //    continue;
-            //}
-            Edge edge(contour);
-            //if (edge.getLength() < min_edge_length_) continue;
-            edges.push_back(edge);
-        }
-        std::sort(edges.begin(), edges.end(),
-            [](const Edge& a, const Edge& b) {
-                return a.getLength() > b.getLength();
-            });
         return edges;
     }
 
@@ -189,54 +147,6 @@ namespace EBPTns {
         std::cout << "   Superpixels created: " << num_superpixels << std::endl;
 
         return labels;
-    }
-
-    std::unordered_map<int, std::vector<Edge>> TextureAnalysis::assignEdgesToSuperpixels(
-        const std::vector<Edge>& edges, const cv::Mat& labels) {
-
-        std::unordered_map<int, std::vector<Edge>> superpixel_map;
-
-        if (labels.empty()) {
-            std::cerr << "labels is empty" << std::endl;
-            return superpixel_map;
-        }
-
-        for (const auto& edge : edges) {
-            cv::Point2f center = edge.getCenter();
-            int x = static_cast<int>(center.x);
-            int y = static_cast<int>(center.y);
-
-            if (x < 0 || x >= labels.cols || y < 0 || y >= labels.rows) {
-                continue;
-            }
-
-            int sp_id = labels.at<int>(y, x);
-            superpixel_map[sp_id].push_back(edge);
-        }
-
-        std::cout << "   Superpixels with edges " << superpixel_map.size() << std::endl;
-
-        // Подсчет суперпикселей с разным количеством ребер
-        int empty_sp = 0;
-        int sp_with_1 = 0;
-        int sp_with_2_5 = 0;
-        int sp_with_6_plus = 0;
-
-        for (const auto& [sp_id, sp_edges] : superpixel_map) {
-            size_t count = sp_edges.size();
-            if (count == 0) empty_sp++;
-            else if (count == 1) sp_with_1++;
-            else if (count <= 5) sp_with_2_5++;
-            else sp_with_6_plus++;
-        }
-
-        std::cout << "   Статистика суперпикселей:" << std::endl;
-        std::cout << "     - Пустых: " << empty_sp << std::endl;
-        std::cout << "     - С 1 ребром: " << sp_with_1 << std::endl;
-        std::cout << "     - С 2-5 ребрами: " << sp_with_2_5 << std::endl;
-        std::cout << "     - С 6+ ребрами: " << sp_with_6_plus << std::endl;
-
-        return superpixel_map;
     }
 
     void TextureAnalysis::classifySourceGroups(std::vector<SourceGroupInfo>& source_groups) {
@@ -392,7 +302,7 @@ namespace EBPTns {
         }
     }
 
-    AnalysisResult TextureAnalysis::analyzeTextureWithSuperpixelsStructured(
+    AnalysisResult TextureAnalysis::analyzeTexture(
         const cv::Mat& input_image,
         const std::string& model_path) {
 
@@ -422,7 +332,7 @@ namespace EBPTns {
         //ImageDisplay::saveAndShow("probability_map.png", "probability", prob_map_display);
 
         // Edges
-        std::vector<Edge> edges = extractEdgesStructured(input_image, edge_probability_map);
+        std::vector<Edge> edges = extractEdges(input_image, edge_probability_map);
         if (edges.empty()) {
             std::cerr << "Any edge didn't found" << std::endl;
             return AnalysisResult();
@@ -479,14 +389,12 @@ namespace EBPTns {
         });
         classifySourceGroups(source_infos);
 
-        EBPT ebpt_model;
         cv::Size size = input_image.size();
 
         int cnt = 1;
         for (auto& group : source_infos) {
             group.hull = computeHull(group.group);
             group.group.setIndex(cnt++);
-            ebpt_model.addEdgeGroup(group);
             std::string s = "Patch before" + std::to_string(cnt);
             std::string s1 = "Mask before" + std::to_string(cnt);
             //ImageDisplay::show(s1, group.mask);
@@ -498,7 +406,7 @@ namespace EBPTns {
 
         //ImageDisplay::setPartFinalVisualization(groups_hull_visualization, ImageDisplay::groups);
 
-        AnalysisResult result(ebpt_model, superpixel_labels);
+        AnalysisResult result(source_infos);
 
         return result;
     }

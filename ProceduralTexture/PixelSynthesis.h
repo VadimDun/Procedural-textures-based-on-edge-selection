@@ -5,7 +5,6 @@
 #include <random>
 #include "EdgeGroup.h"
 #include "PlacedGroup.h" 
-#include "EBPT.h"
 
 namespace EBPTns {
 

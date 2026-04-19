@@ -3,10 +3,10 @@
 #include <string>
 #include <vector>
 #include <opencv2/opencv.hpp>
+#include <random>
 
 #include "Edge.h"
 #include "EdgeGroup.h"
-#include "EBPT.h"
 #include "PlacedGroup.h"
 
 using namespace EBPTns;
@@ -20,10 +20,6 @@ public:
     static void show(const std::string& nameWindow, const cv::Mat& mat);
     static void saveAndShowWithSize(const std::string& path, const std::string& nameWindow, const cv::Mat& mat, const cv::Size& size);
     static void saveAndShow(const std::string& path, const std::string& nameWindow, const cv::Mat& mat);
-
-    static void initFinalVisualization();
-    static void setPartFinalVisualization(const cv::Mat& mat, PartFinalVis part);
-    static void showFinalVisualization();
 
     static cv::Mat visualizeGroups(const cv::Mat& image, const std::vector<SourceGroupInfo>& groups);
     static cv::Mat visualizeEdges(const cv::Mat& image, const std::vector<Edge>& edges);
@@ -58,5 +54,4 @@ public:
 
 private:
     static void drawArrow(cv::Mat& img, const cv::Point& end, float angle, const cv::Scalar& color);
-    static cv::Mat final_visualization;
 };

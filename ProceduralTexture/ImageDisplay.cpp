@@ -1,7 +1,5 @@
 ﻿#include "ImageDisplay.h"
 
-cv::Mat ImageDisplay::final_visualization;
-
 void ImageDisplay::save(const std::string& path, const cv::Mat& mat) {
     cv::imwrite(IMAGE_FOLDER + path, mat);
 }
@@ -21,108 +19,6 @@ void ImageDisplay::saveAndShowWithSize(const std::string& path, const std::strin
     cv::namedWindow(nameWindow, cv::WINDOW_NORMAL);
     cv::resizeWindow(nameWindow, size.width / 2, size.height / 2);
     cv::imshow(nameWindow, mat);
-}
-
-void ImageDisplay::initFinalVisualization() {
-    int viz_width = 1200;
-    int viz_height = 800;
-    final_visualization = cv::Mat::zeros(viz_height, viz_width, CV_8UC3);
-    final_visualization.setTo(cv::Scalar(30, 30, 30));
-}
-
-void ImageDisplay::setPartFinalVisualization(const cv::Mat& mat, PartFinalVis part) {
-    cv::Mat res;
-    cv::resize(mat, res, cv::Size(350, 350));
-    cv::Rect toCopy;
-    cv::Point point;
-    std::string text;
-    std::string path;
-
-    switch (part) {
-    case PartFinalVis::input:
-        toCopy = cv::Rect(50, 50, 350, 350);
-        point = cv::Point(60, 40);
-        text = "Input Texture";
-        path = "input_texture.png";
-        break;
-    case PartFinalVis::edges:
-        toCopy = cv::Rect(450, 50, 350, 350);
-        point = cv::Point(460, 40);
-        text = "Detected Edges";
-        path = "edges.png";
-        break;
-    case PartFinalVis::groups:
-        toCopy = cv::Rect(50, 450, 350, 350);
-        point = cv::Point(60, 440);
-        text = "Edge Groups";
-        path = "groups.png";
-        break;
-    case PartFinalVis::output:
-        toCopy = cv::Rect(450, 450, 350, 350);
-        point = cv::Point(460, 440);
-        text = "Output Texture";
-        path = "output_texture.png";
-        break;
-    case PartFinalVis::placement:
-        toCopy = cv::Rect(825, 50, 350, 350);
-        point = cv::Point(835, 40);
-        text = "Placement Map";
-        path = "placement_map.png";
-        break;
-    }
-
-    res.copyTo(final_visualization(toCopy));
-    cv::rectangle(final_visualization, toCopy,
-        cv::Scalar(255, 255, 255), 2);
-    cv::putText(final_visualization, text,
-        point, cv::FONT_HERSHEY_SIMPLEX, 0.7,
-        cv::Scalar(255, 255, 255), 2);
-
-    saveAndShow(path, text, mat);
-}
-void ImageDisplay::showFinalVisualization() {
-    // TODO не знаю, стоит ли добавлять
-    //cv::Rect info_rect(825, 450, 350, 350);
-    //cv::rectangle(final_visualization, info_rect, cv::Scalar(50, 50, 70), -1);
-    //cv::rectangle(final_visualization, info_rect, cv::Scalar(200, 200, 200), 2);
-
-    //std::vector<std::string> info_lines = {
-    //    "EBPT Texture Synthesis Report",
-    //    "=============================",
-    //    "Configuration:",
-    //    "  Input: " + std::to_string(input_image.cols) + "x" +
-    //                std::to_string(input_image.rows),
-    //    "  Output: " + std::to_string(output_width) + "x" +
-    //                 std::to_string(output_height),
-    //    "",
-    //    "Analysis Results:",
-    //    "  Edges detected: " + std::to_string(edges.size()),
-    //    "  Groups created: " + std::to_string(ebpt_model.getEdgeGroups().size()),
-    //    "",
-    //    "Synthesis Parameters:",
-    //    "  Scale: " + std::to_string(scale),
-    //    "  Density: " + std::to_string(density),
-    //    "  Angle spread: " + std::to_string(angle_spread),
-    //    "",
-    //    "Placement Results:",
-    //    "  Groups placed: " + std::to_string(placed_groups.size()),
-    //    "  Texture type: " + std::string(use_real_texture ? "Real" : "Test")
-    //};
-
-    //for (size_t i = 0; i < info_lines.size(); ++i) {
-    //    cv::putText(final_visualization, info_lines[i],
-    //        cv::Point(info_rect.x + 10, info_rect.y + 30 + i * 20),
-    //        cv::FONT_HERSHEY_SIMPLEX, 0.45,
-    //        cv::Scalar(200, 200, 150), 1);
-    //}
-
-    //cv::putText(final_visualization, "System Info",
-    //    cv::Point(info_rect.x + 10, info_rect.y + 20),
-    //    cv::FONT_HERSHEY_SIMPLEX, 0.6,
-    //    cv::Scalar(255, 255, 255), 1);
-
-    save("images/final_report.png", final_visualization);
-    show("Final Report", final_visualization);
 }
 
 ////////////////////////////// 

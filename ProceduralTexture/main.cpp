@@ -5,7 +5,7 @@
 
 #include "Edge.h"
 #include "EdgeGroup.h"
-#include "EBPT.h"
+#include "SourceGroupInfo.h"
 #include "TextureAnalysis.h"
 #include "TextureSynthesis.h"
 #include "PixelSynthesis.h"
@@ -52,8 +52,6 @@ static cv::Mat loadRealTexture(const std::string& path) {
 int main(int argc, char** argv) {
     setlocale(LC_ALL, "ru");
 
-    ImageDisplay::initFinalVisualization();
-
     bool use_real_texture = false;
     std::string texture_path;
 
@@ -76,7 +74,6 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    ImageDisplay::setPartFinalVisualization(input_image, ImageDisplay::input );
     ImageDisplay::saveAndShowWithSize("input_texture.png", "Input Texture", input_image, cv::Size(input_image.cols, input_image.rows));
 
     // Анализ текстуры
@@ -99,10 +96,8 @@ int main(int argc, char** argv) {
     }
 
     std::cout << "\n\n---------------------analyzeTextureWithSuperpixelsStructured---------------------\n\n" << std::endl;
-    auto result = analyzer.analyzeTextureWithSuperpixelsStructured(input_image, MODEL_PATH);
+    auto result = analyzer.analyzeTexture(input_image, MODEL_PATH);
     if (!result.isValid()) { return 1; }
-
-    EBPT ebpt_model = result.modelEBPT;
 
     /////////////////////////////
     // Бины
@@ -178,12 +173,10 @@ int main(int argc, char** argv) {
     TextureSynthesis synthesizer(outSize, enable_rotation);
     synthesizer.setRandomSeed(42);
     synthesizer.setAvoidOverlap(true);
-    synthesizer.setMinDistance(40.0f);
     
-    const auto& source_groups = ebpt_model.getEdgeGroups();
+    const auto& source_groups = result.source_groups;
 
     std::vector<PlacedGroup> placed_groups;
-    bool hierarchical_enabled = true;
     std::cout << "\n\n---------------------synthesizeHierarchicalPlacement---------------------\n\n" << std::endl;
 
     placed_groups = synthesizer.synthesizeHierarchicalPlacement(
@@ -197,7 +190,7 @@ int main(int argc, char** argv) {
         placed_groups, outSize
     );
     ImageDisplay::saveAndShowWithSize("placement_map.png", "Placement Map", placement_map, outSize);
-
+    //placement_map.~Mat();
     // Заполнение пикселей
     PixelSynthesis pixel_synthesis;
 
@@ -230,13 +223,13 @@ int main(int argc, char** argv) {
             placement_map = ImageDisplay::drawPlacementMap(
                 placed_groups, outSize
             );
-            ImageDisplay::setPartFinalVisualization(placement_map, ImageDisplay::placement);
+            ImageDisplay::saveAndShowWithSize("placement_map.png", "Placement Map", placement_map, outSize);
 
             output_texture = pixel_synthesis.fillPixels(
                 input_image, source_groups, placed_groups,
                 outSize
             );
-            ImageDisplay::setPartFinalVisualization(output_texture, ImageDisplay::output);
+            ImageDisplay::saveAndShowWithSize("output_texture.png", "Output Texture", output_texture, outSize);
 
             cv::imshow("Placement Map", placement_map);
             cv::imshow("Output Texture", output_texture);

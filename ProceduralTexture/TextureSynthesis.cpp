@@ -51,22 +51,6 @@ namespace EBPTns {
         rng_.seed(seed);
     }
 
-    cv::Point2f TextureSynthesis::generateRandomPosition() {
-        if (outputSize.width <= 0 || outputSize.height <= 0) {
-            return cv::Point2f(0, 0);
-        }
-        float margin = 50.0f;
-        std::uniform_real_distribution<float> dist_x(
-            margin,
-            std::max(margin, static_cast<float>(outputSize.width) - margin)
-        );
-        std::uniform_real_distribution<float> dist_y(
-            margin,
-            std::max(margin, static_cast<float>(outputSize.height) - margin)
-        );
-        return cv::Point2f(dist_x(rng_), dist_y(rng_));
-    }
-
     float TextureSynthesis::generateRandomAngle(float variation) {
         if (variation <= 0.0f) {
             return 0.0f;
@@ -91,21 +75,6 @@ namespace EBPTns {
     }
 
     ////////////////////////////////
-
-    bool TextureSynthesis::checkOverlap(const EdgeGroup& group1,
-        const EdgeGroup& group2,
-        float min_distance) {
-        if (group1.getEdges().empty() || group2.getEdges().empty()) {
-            return false;
-        }
-        cv::Point2f center1 = group1.getCenter();
-        cv::Point2f center2 = group2.getCenter();
-        float dx = center1.x - center2.x;
-        float dy = center1.y - center2.y;
-        float distance = std::sqrt(dx * dx + dy * dy);
-        float combined_radius = group1.getRadialSpread() + group2.getRadialSpread();
-        return distance < (combined_radius + min_distance);
-    }
 
     bool TextureSynthesis::checkHullIntersection(const std::vector<cv::Point>& hull1,
         const std::vector<cv::Point>& hull2) const {

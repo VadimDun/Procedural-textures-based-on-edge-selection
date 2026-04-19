@@ -3,11 +3,10 @@
 #include "EdgeGroup.h"
 #include <vector>
 #include <opencv2/core.hpp>
-#include <random>
 
 namespace EBPTns {
 
-    enum class ScaleLevel: uint8_t {
+    enum class ScaleLevel : uint8_t {
         LARGE,
         MEDIUM,
         SMALL,
@@ -24,7 +23,7 @@ namespace EBPTns {
 
     struct SourceGroupInfo {
         EdgeGroup group;
-        int superpixel_id;
+        uint8_t superpixel_id;
         std::vector<cv::Point> hull;
 
         ScaleLevel scale_level;
@@ -51,23 +50,6 @@ namespace EBPTns {
         //    }
         //    return *this;
         //}
-    };
-
-    class EBPT {
-    public:
-        EBPT() = default;
-
-        const std::vector<SourceGroupInfo>& getEdgeGroups() const { return edge_groups_; }
-        int getNumGroups() const { return static_cast<int>(edge_groups_.size()); }
-
-        void clear();
-        bool isEmpty() const { return edge_groups_.empty(); }
-
-        void addEdgeGroup(const SourceGroupInfo& group);
-
-    private:
-        std::vector<SourceGroupInfo> edge_groups_;
-
     };
 
 }

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "EdgeGroup.h"
-#include "EBPT.h"
+#include "SourceGroupInfo.h"
 #include <opencv2/imgproc.hpp>
 
 namespace EBPTns {
