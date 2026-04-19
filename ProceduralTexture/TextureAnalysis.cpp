@@ -9,22 +9,11 @@
 namespace EBPTns {
 
     TextureAnalysis::TextureAnalysis() {
-        setCannyThresholds(50, 150);
         setMinEdgeLength(10);
-        setGroupingDistance(50);
-    }
-
-    void TextureAnalysis::setCannyThresholds(double low, double high) {
-        canny_low_threshold_ = low;
-        canny_high_threshold_ = high;
     }
 
     void TextureAnalysis::setMinEdgeLength(int min_length) {
         min_edge_length_ = min_length;
-    }
-
-    void TextureAnalysis::setGroupingDistance(int distance) {
-        grouping_distance_ = distance;
     }
 
     // Structured forests
@@ -162,24 +151,6 @@ namespace EBPTns {
         return simplified;
     }
 
-    bool TextureAnalysis::shouldGroup(const Edge& edge1, const Edge& edge2) const {
-        cv::Point2f center1 = edge1.getCenter();
-        cv::Point2f center2 = edge2.getCenter();
-        float dx = center1.x - center2.x;
-        float dy = center1.y - center2.y;
-        float distance = std::sqrt(dx * dx + dy * dy);
-        if (distance > grouping_distance_) {
-            return false;
-        }
-        float angle1 = edge1.getAngle();
-        float angle2 = edge2.getAngle();
-        float angle_diff = std::abs(angle1 - angle2);
-        if (angle_diff > CV_PI / 2) {
-            angle_diff = CV_PI - angle_diff;
-        }
-        return true;
-    }
-
     /////////////////////////////
     // Суперпиксели
     /////////////////////////////
@@ -191,7 +162,7 @@ namespace EBPTns {
             << ", ruler=" << ruler << ", threshold=" << sp_threshold << std::endl;
     }
 
-    cv::Mat TextureAnalysis::computeSuperpixels(const cv::Mat& image) {
+    cv::Mat TextureAnalysis::computeSuperpixels(const cv::Mat& image) const {
 
         // Конвертируем в LAB цветовое пространство (лучше для суперпикселей)
         cv::Mat lab_image;
@@ -274,10 +245,15 @@ namespace EBPTns {
 
         std::vector<float> group_sizes;
         group_sizes.reserve(source_groups.size());
+        std::cout << "source_groups.size()=" << source_groups.size() << std::endl;
 
         for (const auto& group_info : source_groups) {
             float size = USE_RADIAL_SPRED ? group_info.group.getRadialSpread() : cv::contourArea(group_info.hull);
-            if (size == 0) continue;
+            std::cout << "group_sizes " << size << std::endl;
+            if (size == 0) {
+                continue;
+
+            }
             group_sizes.push_back(size);
         }
 
@@ -285,6 +261,7 @@ namespace EBPTns {
         std::sort(sorted_sizes.begin(), sorted_sizes.end());
 
         size_t n = sorted_sizes.size();
+        std::cout << "n=" << n << std::endl;
 
         // СТРАТЕГИЯ 1: Поиск естественных разрывов
         std::vector<float> gaps;
@@ -301,9 +278,9 @@ namespace EBPTns {
         std::sort(sorted_indices.begin(), sorted_indices.end(),
             [&gaps](int a, int b) { return gaps[a] > gaps[b]; });
 
-        //for (size_t i = 0; i < n-1; ++i) {
-        //    std::cout << "sorted gap " << i << ": " << gaps[sorted_indices[i]] << std::endl;
-        //}
+        for (size_t i = 0; i < n-1; ++i) {
+            std::cout << "sorted gap " << i << ": " << gaps[sorted_indices[i]] << std::endl;
+        }
 
         // Используем 2 наибольших разрыва для разделения на 3 категории (крупные/средние/мелкие)
         if (n >= 4 && sorted_indices.size() >= 2) {
@@ -502,12 +479,12 @@ namespace EBPTns {
         });
         classifySourceGroups(source_infos);
 
-        EBPT ebpt_model(input_image);
+        EBPT ebpt_model;
         cv::Size size = input_image.size();
 
         int cnt = 1;
         for (auto& group : source_infos) {
-            group.mask = getMask(group.group, size, group.hull);
+            group.hull = computeHull(group.group);
             group.group.setIndex(cnt++);
             ebpt_model.addEdgeGroup(group);
             std::string s = "Patch before" + std::to_string(cnt);
@@ -517,39 +494,24 @@ namespace EBPTns {
 
 
         cv::Mat groups_hull_visualization = ImageDisplay::visualizeGroups(input_image, source_infos);
-        ImageDisplay::setPartFinalVisualization(groups_hull_visualization, ImageDisplay::groups);
+        ImageDisplay::saveAndShowWithSize("groups.png", "Edge Groups", groups_hull_visualization, cv::Size(groups_hull_visualization.cols, groups_hull_visualization.rows));
+
+        //ImageDisplay::setPartFinalVisualization(groups_hull_visualization, ImageDisplay::groups);
 
         AnalysisResult result(ebpt_model, superpixel_labels);
 
         return result;
     }
 
-
-    cv::Mat TextureAnalysis::getMask(const EdgeGroup& group, const cv::Size& image_size, std::vector<cv::Point>& hull) {
+    std::vector<cv::Point> TextureAnalysis::computeHull(const EdgeGroup& group) {
         std::vector<cv::Point> all_points = group.getAllPoints();
+        std::vector<cv::Point> hull;
 
         if (all_points.empty()) {
-            return cv::Mat::zeros(image_size, CV_8UC1);
+            return hull;
         }
 
-        // Вычисляем выпуклую оболочку
         cv::convexHull(all_points, hull);
-
-        // Создаем маску
-        cv::Mat mask = cv::Mat::zeros(image_size, CV_8UC1);
-
-        if (hull.size() >= 3) {
-            std::vector<std::vector<cv::Point>> hull_contour = { hull };
-            cv::fillPoly(mask, hull_contour, cv::Scalar(255));
-        }
-        else {
-            for (const auto& p : all_points) {
-                if (p.x >= 0 && p.x < image_size.width && p.y >= 0 && p.y < image_size.height) {
-                    mask.at<uchar>(p.y, p.x) = 255;
-                }
-            }
-        }
-
-        return mask;
+        return hull;
     }
 }

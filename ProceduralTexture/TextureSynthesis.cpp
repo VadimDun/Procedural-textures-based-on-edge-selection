@@ -33,7 +33,7 @@ namespace EBPTns {
         ScaleLevelParams small_params;
         small_params.base_scale = 1.0f;
         small_params.scale_variation = 0.4f;
-        small_params.percent_fill_target = 0.94f;
+        small_params.percent_fill_target = 0.98f;
 
         if (enable_rotation) {
             large_params.angle_variation = medium_params.angle_variation = small_params.angle_variation = 0.25f;
@@ -434,7 +434,7 @@ namespace EBPTns {
         {
             if (p.x < 0 || p.y < 0)
             {
-                std::cout << "\nNEGATIVE POINT: " << p;
+                std::cerr << "\nNEGATIVE POINT: " << p;
             }
         }
 

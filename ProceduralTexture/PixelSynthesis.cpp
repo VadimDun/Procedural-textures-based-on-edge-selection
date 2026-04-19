@@ -148,7 +148,7 @@ namespace EBPTns {
                 continue;
             }
 
-            int small_threshold = 30;
+            int small_threshold = 10;
             bool isSmall = (patch_part.rows < small_threshold || patch_part.cols < small_threshold);
             //bool isSmall = placed.scale_level == ScaleLevel::SMALL;
             if (!isSmall) {

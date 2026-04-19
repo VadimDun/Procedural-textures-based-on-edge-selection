@@ -41,9 +41,9 @@ static cv::Mat loadRealTexture(const std::string& path) {
         return createTestImage(400, 400);
     }
 
-    if (image.cols > 512 || image.rows > 512) {
-        cv::resize(image, image, cv::Size(512, 512));
-    }
+    //if (image.cols > 512 || image.rows > 512) {
+        //cv::resize(image, image, cv::Size(512, 512));
+    //}
 
     return image;
 }
@@ -77,14 +77,13 @@ int main(int argc, char** argv) {
     }
 
     ImageDisplay::setPartFinalVisualization(input_image, ImageDisplay::input );
+    ImageDisplay::saveAndShowWithSize("input_texture.png", "Input Texture", input_image, cv::Size(input_image.cols, input_image.rows));
 
     // Анализ текстуры
     TextureAnalysis analyzer;
 
     if (use_real_texture) {
-        analyzer.setCannyThresholds(50, 150);
         analyzer.setMinEdgeLength(15);
-        analyzer.setGroupingDistance(20);
 
         int regionSize = 120;
         double threshold = 0.1;
@@ -92,9 +91,7 @@ int main(int argc, char** argv) {
 
     }
     else {
-        analyzer.setCannyThresholds(20, 60);
         analyzer.setMinEdgeLength(10);
-        analyzer.setGroupingDistance(60);
 
         int regionSize = 100;
         double threshold = 0.25;

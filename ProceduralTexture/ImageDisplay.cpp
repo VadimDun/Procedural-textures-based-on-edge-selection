@@ -251,30 +251,6 @@ cv::Mat ImageDisplay::visualizeGroups(const cv::Mat& image, const std::vector<So
                 cv::FONT_HERSHEY_SIMPLEX, 0.5,
                 color, 2);
         }
-        else if (!group_info.mask.empty()) {
-            // Fallback: используем маску для поиска контура
-            std::vector<std::vector<cv::Point>> contours;
-            cv::findContours(group_info.mask.clone(), contours,
-                cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-
-            if (!contours.empty()) {
-                std::vector<cv::Point> hull_from_mask;
-                cv::convexHull(contours[0], hull_from_mask);
-
-                for (size_t i = 0; i < hull_from_mask.size(); ++i) {
-                    cv::line(visualization, hull_from_mask[i],
-                        hull_from_mask[(i + 1) % hull_from_mask.size()],
-                        color, 2);
-                }
-
-                cv::Rect bbox = cv::boundingRect(hull_from_mask);
-                std::string label = "G" + std::to_string(group_idx + 1);
-                cv::putText(visualization, label,
-                    cv::Point(bbox.x, bbox.y - 5),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.5,
-                    color, 2);
-            }
-        }
     }
 
     return visualization;
