@@ -3,6 +3,7 @@
 #include <cmath>
 #include <iostream>
 #include <algorithm>
+#include <chrono>
 #include "TextureAnalysis.h"
 #include "ImageDisplay.h"
 
@@ -33,7 +34,7 @@ namespace EBPTns {
         ScaleLevelParams small_params;
         small_params.base_scale = 1.0f;
         small_params.scale_variation = 0.4f;
-        small_params.percent_fill_target = 0.94f;
+        small_params.percent_fill_target = 0.98f;
 
         if (enable_rotation) {
             large_params.angle_variation = medium_params.angle_variation = small_params.angle_variation = 0.25f;
@@ -49,22 +50,6 @@ namespace EBPTns {
 
     void TextureSynthesis::setRandomSeed(unsigned int seed) {
         rng_.seed(seed);
-    }
-
-    cv::Point2f TextureSynthesis::generateRandomPosition() {
-        if (outputSize.width <= 0 || outputSize.height <= 0) {
-            return cv::Point2f(0, 0);
-        }
-        float margin = 50.0f;
-        std::uniform_real_distribution<float> dist_x(
-            margin,
-            std::max(margin, static_cast<float>(outputSize.width) - margin)
-        );
-        std::uniform_real_distribution<float> dist_y(
-            margin,
-            std::max(margin, static_cast<float>(outputSize.height) - margin)
-        );
-        return cv::Point2f(dist_x(rng_), dist_y(rng_));
     }
 
     float TextureSynthesis::generateRandomAngle(float variation) {
@@ -91,21 +76,6 @@ namespace EBPTns {
     }
 
     ////////////////////////////////
-
-    bool TextureSynthesis::checkOverlap(const EdgeGroup& group1,
-        const EdgeGroup& group2,
-        float min_distance) {
-        if (group1.getEdges().empty() || group2.getEdges().empty()) {
-            return false;
-        }
-        cv::Point2f center1 = group1.getCenter();
-        cv::Point2f center2 = group2.getCenter();
-        float dx = center1.x - center2.x;
-        float dy = center1.y - center2.y;
-        float distance = std::sqrt(dx * dx + dy * dy);
-        float combined_radius = group1.getRadialSpread() + group2.getRadialSpread();
-        return distance < (combined_radius + min_distance);
-    }
 
     bool TextureSynthesis::checkHullIntersection(const std::vector<cv::Point>& hull1,
         const std::vector<cv::Point>& hull2) const {
@@ -212,6 +182,10 @@ namespace EBPTns {
         }
     }
 
+    inline void TextureSynthesis::erodeOccupancyMap(int width) {
+        cv::erode(occupancy_map_, occupancy_map_, cv::Mat(), cv::Point(-1, -1), width);
+    }
+
     float TextureSynthesis::getOccupancyAtPoint(const cv::Point2f& point) const {
         if (occupancy_map_.empty()) return 0.0f;
 
@@ -262,6 +236,27 @@ namespace EBPTns {
         return cv::Point2f(dist_x(rng_), dist_y(rng_));
     }
 
+    cv::Point TextureSynthesis::findLargestEmptyLocation(float& radius)
+    {
+        cv::Mat inverted;
+        cv::threshold(occupancy_map_, inverted, 10, 255, cv::THRESH_BINARY);
+        cv::bitwise_not(inverted,inverted);
+
+        //ImageDisplay::show("inverted", inverted);
+
+        cv::Mat dist;
+        cv::distanceTransform(inverted, dist, cv::DIST_L2, 5);
+        //ImageDisplay::show("dist", dist);
+
+        double maxVal;
+        cv::Point maxLoc;
+
+        cv::minMaxLoc(dist, nullptr, &maxVal, nullptr, &maxLoc);
+
+        radius = static_cast<float>(maxVal);
+        return maxLoc;
+    }
+
     bool TextureSynthesis::checkOverlapByLevel(
         const PlacedGroup& new_group,
         const std::vector<PlacedGroup>& existing_groups,
@@ -279,18 +274,23 @@ namespace EBPTns {
                 if (checkHullIntersection(new_group.hull, existing.hull)) {
                     float intersection_area = computeHullIntersectionArea(new_group.hull, existing.hull);
                     total_overlap_area += intersection_area;
-
+                    float overlap_ratio = intersection_area / new_group_area;
+                    float overlap_ratio_existing = intersection_area / (float)cv::contourArea(existing.hull);
                     // ГРУППЫ ОДНОГО УРОВНЯ - строгий запрет
                     if (current_level == existing_level) {
-                        float overlap_ratio = intersection_area / new_group_area;
-                        if (overlap_ratio > 0.1f) {
+                        float th = 0.2f;
+                        if (current_level == ScaleLevel::SMALL) th = 0.1f;
+                        if (overlap_ratio > th
+                            //|| overlap_ratio_existing > th
+                            ) {
                             return true;
                         }
                     }
                     else if (current_level != existing_level) {
                         // Разные уровни (LARGE/MEDIUM с SMALL)
-                        float overlap_ratio = intersection_area / new_group_area;
-                        if (overlap_ratio > 0.25f) {
+                        if (overlap_ratio > 0.25f 
+                            || overlap_ratio_existing > 0.25f
+                            ) {
                             return true;
                         }
                     }
@@ -300,7 +300,10 @@ namespace EBPTns {
 
         // Проверка суммарного перекрытия
         float total_overlap_ratio = total_overlap_area / new_group_area;
-        if (total_overlap_ratio > 0.40f) {
+
+        float total_th = 0.6f;
+        if (current_level == ScaleLevel::SMALL) total_th = 0.4f;
+        if (total_overlap_ratio > total_th) {
             return true;
         }
 
@@ -401,7 +404,7 @@ namespace EBPTns {
         {
             if (p.x < 0 || p.y < 0)
             {
-                std::cout << "\nNEGATIVE POINT: " << p;
+                std::cerr << "\nNEGATIVE POINT: " << p;
             }
         }
 
@@ -452,6 +455,9 @@ namespace EBPTns {
             bbox_rotated = tight_bbox;
         }
 
+        if (cv::countNonZero(transformed_mask) < MIN_SIZE_PATCH)
+            return PlacedGroup();
+
         // Позиция на output
 
         cv::Point2f new_center(
@@ -501,6 +507,7 @@ namespace EBPTns {
         const std::vector<SourceGroupInfo>& source_groups) {
 
         std::vector<PlacedGroup> all_placed_groups;
+        auto total_start = std::chrono::high_resolution_clock::now();
 
         occupancy_map_ = cv::Mat::zeros(outputSize.height, outputSize.width, CV_8UC1);
 
@@ -523,6 +530,14 @@ namespace EBPTns {
                 continue;
             }
 
+            auto level_start = std::chrono::high_resolution_clock::now();
+            if (level == ScaleLevel::MEDIUM) {
+                erodeOccupancyMap(20);                               
+            }
+            else if (level == ScaleLevel::SMALL) {
+                erodeOccupancyMap(3);
+            }
+
             const auto& level_groups = groups_by_level[level];
             const auto& params = scale_params_[level];
 
@@ -539,22 +554,71 @@ namespace EBPTns {
             int overlap_count = 0;
             int max_attempts_per_group = 1000;
             int total_attempts = 0;
-            const int MAX_TOTAL_ATTEMPTS = 10000;
+            const int MAX_TOTAL_ATTEMPTS = 1000;
 
             while (current_fill < target_fill && total_attempts < MAX_TOTAL_ATTEMPTS) {
                 total_attempts++;
 
-                int source_idx = group_dist(rng_);
-                const SourceGroupInfo& source_info = *level_groups[source_idx];
+                const SourceGroupInfo* source_info;
 
-                cv::Point2f position = generatePositionByLevel(level);
+                cv::Point2f position;
+                float scale;
+
+                if (level != ScaleLevel::LARGE)
+                {
+                    float radius;
+                    position = findLargestEmptyLocation(radius);
+                    int min_group_size = level_groups[level_groups.size() - 1]->group.getRadialSpread();
+                    //if (radius < min_group_size * 0.3)
+                    //    break;
+
+                    float desired_size = radius * 2.0f;
+
+                    int best_idx = 0;
+                    float best_diff = 1e9f;
+
+                    for (int i = 0; i < level_groups.size(); i++)
+                    {
+                        float group_size =
+                            level_groups[i]->group.getRadialSpread();
+
+                        float diff = std::abs(group_size - desired_size);
+
+                        if (diff < best_diff)
+                        {
+                            best_diff = diff;
+                            best_idx = i;
+                        }
+                    }
+
+                    if (1.3 * level_groups[0]->group.getRadialSpread() < radius) {
+                        best_idx = group_dist(rng_);
+                    }
+
+                    source_info = level_groups[best_idx];
+
+
+                    float base_patch_size = static_cast<float>(source_info->group.getRadialSpread());
+
+                    scale = desired_size / base_patch_size;
+                    scale = std::max(0.3f, std::min(scale, 1.2f));
+                }
+                else
+                {
+                    int source_idx = group_dist(rng_);
+                    source_info = level_groups[source_idx];
+
+                    position = generatePositionByLevel(level);
+                    scale = generateRandomScale(params.base_scale, params.scale_variation);
+                }
 
                 float angle = generateRandomAngle(params.angle_variation);
-                float scale = generateRandomScale(params.base_scale, params.scale_variation);
 
                 // Трансформируем группу
                 PlacedGroup placed_group = transformGroup(
-                    source_info, input_image, source_info.group.getIndex(), position, angle, scale);
+                    *source_info, input_image, source_info->group.getIndex(), position, angle, scale);
+                if (placed_group.source_index == -1) continue;
+
                 placed_group.scale_level = level;
 
                 // Проверяем перекрытие с уже размещенными группами
@@ -562,7 +626,7 @@ namespace EBPTns {
                 if (!all_placed_groups.empty()) {
                     if (checkOverlapByLevel(placed_group, all_placed_groups, level)) {
                         overlap_count++;
-                        has_overlap = true;
+                        //has_overlap = true;
                     }
                 }
 
@@ -579,16 +643,6 @@ namespace EBPTns {
                 // Сброс при успешном размещении
                 overlap_count = 0;
 
-                // Проверяем, что группа не слишком близко к границе
-                if (position.x - placed_group.patch.cols / 2 < 0 ||
-                    position.y - placed_group.patch.rows / 2 < 0 ||
-                    position.x + placed_group.patch.cols / 2 > outputSize.width ||
-                    position.y + placed_group.patch.rows / 2 > outputSize.height) {
-                    if (placed_count % 20 == 0) {
-                        std::cout << "  Group " << placed_count << " near boundary" << std::endl;
-                    }
-                }
-
                 all_placed_groups.push_back(placed_group);
                 updateOccupancyMap(placed_group);
                 placed_count++;
@@ -603,17 +657,25 @@ namespace EBPTns {
                 //        << "%, target: " << (target_fill * 100) << "%" << std::endl;
                 //}
 
-                //ImageDisplay::showOccupancyMap(occupancy_map_, "Occupancy after " + scaleLevelToString(level));
+                ImageDisplay::showOccupancyMap(occupancy_map_, "Occupancy after " + scaleLevelToString(level));
             }
+
+            auto level_end = std::chrono::high_resolution_clock::now();
+            auto level_duration = std::chrono::duration_cast<std::chrono::milliseconds>(level_end - level_start);
 
             std::cout << "  Finished " << scaleLevelToString(level)
                 << ": placed " << placed_count << " groups"
                 << ", fill: " << (current_fill * 100) << "%"
-                << " (overlaps: " << overlap_count << ")" << std::endl;
+                << " (overlaps: " << overlap_count << ")"
+                << ", time: " << level_duration.count() / 1000.0 << " sec" << std::endl;
         }
+
+        auto total_end = std::chrono::high_resolution_clock::now();
+        auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(total_end - total_start);
 
         float total_filled = cv::countNonZero(occupancy_map_) / (float)(occupancy_map_.total());
         std::cout << "\nFinal occupancy: " << (total_filled * 100) << "%" << std::endl;
+        std::cout << "Total time: " << total_duration.count() / 1000.0 << " sec" << std::endl;
 
         if (total_filled < 0.95f) {
             std::cout << "Warning: Final occupancy (" << (total_filled * 100)

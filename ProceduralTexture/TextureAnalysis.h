@@ -7,51 +7,35 @@
 #include <unordered_map>
 #include "Edge.h"
 #include "EdgeGroup.h"
-#include "EBPT.h"
+#include "SourceGroupInfo.h"
 
 namespace EBPTns {
 
     struct AnalysisResult {
-        EBPT modelEBPT;
-        cv::Mat superpixel_labels;            // Метки суперпикселей
+        std::vector<SourceGroupInfo> source_groups;
 
         AnalysisResult() = default;
 
-        AnalysisResult(const EBPT& m, const cv::Mat& labels)
-            : modelEBPT(m), superpixel_labels(labels){
+        AnalysisResult(const std::vector<SourceGroupInfo>& sgi)
+            : source_groups(sgi){
         }
 
-        bool isValid() const { return !modelEBPT.getEdgeGroups().empty() && !superpixel_labels.empty(); }
+        bool isValid() const { return !source_groups.empty(); }
     };
 
     class TextureAnalysis {
     public:
         TextureAnalysis();
 
-        AnalysisResult analyzeTextureWithSuperpixelsStructured(
+        AnalysisResult analyzeTexture(
             const cv::Mat& input_image,
             const std::string& model_path);
 
-        void setCannyThresholds(double low = 50, double high = 150);
         void setMinEdgeLength(int min_length = 10);
-        void setGroupingDistance(int distance = 30);
-
         void setSuperpixelParams(int region_size = 30, float ruler = 10.0f, double sp_Thresholds = 0.25);
 
-        std::vector<Edge> extractEdges(const cv::Mat& image);
-        std::vector<Edge> extractEdgesStructured(const cv::Mat& image, cv::Mat edge_probability_map);
-
-        cv::Mat computeSuperpixels(const cv::Mat& image);
-        std::unordered_map<int, std::vector<Edge>> assignEdgesToSuperpixels(const std::vector<Edge>& edges, const cv::Mat& labels);
-
-        static cv::Mat getMask(const EdgeGroup& group, const cv::Size& image_size, std::vector<cv::Point>& hull);
-
     private:
-        double canny_low_threshold_ = 50.0;
-        double canny_high_threshold_ = 150.0;
-
         int min_edge_length_ = 10;  
-        int grouping_distance_ = 30;
 
         int superpixel_region_size_ = 30;
         float superpixel_ruler_ = 10.0f;
@@ -68,12 +52,15 @@ namespace EBPTns {
 
         bool initializeStructuredDetector(const std::string& model_path);
 
+        std::vector<Edge> extractEdges(const cv::Mat& image, cv::Mat edge_probability_map);
+
+        cv::Mat computeSuperpixels(const cv::Mat& image) const;
+
         std::vector<std::vector<cv::Point>> findContours(const cv::Mat& edges_image);
         std::vector<cv::Point> simplifyContour(const std::vector<cv::Point>& contour);
-        bool shouldGroup(const Edge& edge1, const Edge& edge2) const;
 
         void classifySourceGroups(std::vector<SourceGroupInfo>& source_groups);
         void checkAndAdjustThresholds(std::vector<SourceGroupInfo>& source_groups);
-
+        std::vector<cv::Point> computeHull(const EdgeGroup& group);
     };
 }

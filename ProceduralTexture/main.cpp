@@ -2,10 +2,11 @@
 #include <string>
 #include <vector>
 #include <opencv2/opencv.hpp>
+#include <chrono>
 
 #include "Edge.h"
 #include "EdgeGroup.h"
-#include "EBPT.h"
+#include "SourceGroupInfo.h"
 #include "TextureAnalysis.h"
 #include "TextureSynthesis.h"
 #include "PixelSynthesis.h"
@@ -41,9 +42,9 @@ static cv::Mat loadRealTexture(const std::string& path) {
         return createTestImage(400, 400);
     }
 
-    if (image.cols > 512 || image.rows > 512) {
-        cv::resize(image, image, cv::Size(512, 512));
-    }
+    //if (image.cols > 512 || image.rows > 512) {
+        //cv::resize(image, image, cv::Size(512, 512));
+    //}
 
     return image;
 }
@@ -51,8 +52,7 @@ static cv::Mat loadRealTexture(const std::string& path) {
 
 int main(int argc, char** argv) {
     setlocale(LC_ALL, "ru");
-
-    ImageDisplay::initFinalVisualization();
+    auto prog_start = std::chrono::high_resolution_clock::now();
 
     bool use_real_texture = false;
     std::string texture_path;
@@ -76,15 +76,13 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    ImageDisplay::setPartFinalVisualization(input_image, ImageDisplay::input );
+    ImageDisplay::saveAndShowWithSize("input_texture.png", "Input Texture", input_image, cv::Size(input_image.cols, input_image.rows));
 
     // Анализ текстуры
     TextureAnalysis analyzer;
 
     if (use_real_texture) {
-        analyzer.setCannyThresholds(50, 150);
         analyzer.setMinEdgeLength(15);
-        analyzer.setGroupingDistance(20);
 
         int regionSize = 120;
         double threshold = 0.1;
@@ -92,9 +90,7 @@ int main(int argc, char** argv) {
 
     }
     else {
-        analyzer.setCannyThresholds(20, 60);
         analyzer.setMinEdgeLength(10);
-        analyzer.setGroupingDistance(60);
 
         int regionSize = 100;
         double threshold = 0.25;
@@ -102,10 +98,13 @@ int main(int argc, char** argv) {
     }
 
     std::cout << "\n\n---------------------analyzeTextureWithSuperpixelsStructured---------------------\n\n" << std::endl;
-    auto result = analyzer.analyzeTextureWithSuperpixelsStructured(input_image, MODEL_PATH);
+    auto analyze_start = std::chrono::high_resolution_clock::now();
+    auto result = analyzer.analyzeTexture(input_image, MODEL_PATH);
     if (!result.isValid()) { return 1; }
 
-    EBPT ebpt_model = result.modelEBPT;
+    auto analyze_end = std::chrono::high_resolution_clock::now();
+    auto analyze_duration = std::chrono::duration_cast<std::chrono::milliseconds>(analyze_end - analyze_start);
+    std::cout << "Analyze time: " << analyze_duration.count() / 1000.0 << " sec" << std::endl;
 
     /////////////////////////////
     // Бины
@@ -121,8 +120,24 @@ int main(int argc, char** argv) {
     /////////////////////////////
     cv::Size outSize;
     if (use_real_texture) {
-        outSize.height = input_image.rows * 2;
-        outSize.width = input_image.cols * 2;
+        if (argc > 3) {
+            std::string arg3 = argv[3];
+            std::string arg4 = argv[4];
+            try {
+                int height = std::stoi(arg3);
+                int width = std::stoi(arg4);
+                outSize.height = height;
+                outSize.width = width;
+            }
+            catch (...) {
+                outSize.height = input_image.rows * 2;
+                outSize.width = input_image.cols * 2;
+            }
+        }
+        else {
+            outSize.height = input_image.rows * 2;
+            outSize.width = input_image.cols * 2;
+        }
     }
     else {
         outSize.width = 800;
@@ -165,12 +180,10 @@ int main(int argc, char** argv) {
     TextureSynthesis synthesizer(outSize, enable_rotation);
     synthesizer.setRandomSeed(42);
     synthesizer.setAvoidOverlap(true);
-    synthesizer.setMinDistance(40.0f);
     
-    const auto& source_groups = ebpt_model.getEdgeGroups();
+    const auto& source_groups = result.source_groups;
 
     std::vector<PlacedGroup> placed_groups;
-    bool hierarchical_enabled = true;
     std::cout << "\n\n---------------------synthesizeHierarchicalPlacement---------------------\n\n" << std::endl;
 
     placed_groups = synthesizer.synthesizeHierarchicalPlacement(
@@ -183,17 +196,20 @@ int main(int argc, char** argv) {
     cv::Mat placement_map = ImageDisplay::drawPlacementMap(
         placed_groups, outSize
     );
-    ImageDisplay::setPartFinalVisualization(placement_map, ImageDisplay::placement);
-
+    ImageDisplay::saveAndShowWithSize("placement_map.png", "Placement Map", placement_map, outSize);
+    //placement_map.~Mat();
     // Заполнение пикселей
     PixelSynthesis pixel_synthesis;
-    pixel_synthesis.setRandomSeed(123);
 
     std::cout << "\n\n---------------------fillPixels---------------------\n\n" << std::endl;
     // Заполнение пикселей с масками
     cv::Mat output_texture = pixel_synthesis.fillPixels(
         input_image, source_groups, placed_groups, outSize);
-    ImageDisplay::setPartFinalVisualization(output_texture, ImageDisplay::output);
+    ImageDisplay::saveAndShowWithSize("output_texture.png", "Output Texture", output_texture, outSize);
+
+    auto prog_end = std::chrono::high_resolution_clock::now();
+    auto prog_duration = std::chrono::duration_cast<std::chrono::milliseconds>(analyze_end - analyze_start);
+    std::cout << "Time of work: " << analyze_duration.count() / 1000.0 << " sec" << std::endl;
 
     bool running = true;
     while (running) {
@@ -218,13 +234,13 @@ int main(int argc, char** argv) {
             placement_map = ImageDisplay::drawPlacementMap(
                 placed_groups, outSize
             );
-            ImageDisplay::setPartFinalVisualization(placement_map, ImageDisplay::placement);
+            ImageDisplay::saveAndShowWithSize("placement_map.png", "Placement Map", placement_map, outSize);
 
             output_texture = pixel_synthesis.fillPixels(
                 input_image, source_groups, placed_groups,
                 outSize
             );
-            ImageDisplay::setPartFinalVisualization(output_texture, ImageDisplay::output);
+            ImageDisplay::saveAndShowWithSize("output_texture.png", "Output Texture", output_texture, outSize);
 
             cv::imshow("Placement Map", placement_map);
             cv::imshow("Output Texture", output_texture);
@@ -234,7 +250,6 @@ int main(int argc, char** argv) {
         {
             unsigned int new_seed = std::random_device{}();
             synthesizer.setRandomSeed(new_seed);
-            pixel_synthesis.setRandomSeed(new_seed);
         }
         break;
 

@@ -9,22 +9,11 @@
 namespace EBPTns {
 
     TextureAnalysis::TextureAnalysis() {
-        setCannyThresholds(50, 150);
         setMinEdgeLength(10);
-        setGroupingDistance(50);
-    }
-
-    void TextureAnalysis::setCannyThresholds(double low, double high) {
-        canny_low_threshold_ = low;
-        canny_high_threshold_ = high;
     }
 
     void TextureAnalysis::setMinEdgeLength(int min_length) {
         min_edge_length_ = min_length;
-    }
-
-    void TextureAnalysis::setGroupingDistance(int distance) {
-        grouping_distance_ = distance;
     }
 
     // Structured forests
@@ -50,7 +39,7 @@ namespace EBPTns {
         }
     }
 
-    std::vector<Edge> TextureAnalysis::extractEdgesStructured(const cv::Mat& image, cv::Mat edge_probability_map) {
+    std::vector<Edge> TextureAnalysis::extractEdges(const cv::Mat& image, cv::Mat edge_probability_map) {
         std::vector<Edge> edges;
 
         if (image.empty()) {
@@ -59,8 +48,8 @@ namespace EBPTns {
         }
 
         if (!is_structured_initialized_) {
-            std::cerr << "TextureAnalysis::extractEdgesStructured: StructuredEdgeDetection didn't created "
-                << "Firstly call analyzeTextureStructured or initializeStructuredDetector" << std::endl;
+            std::cerr << "TextureAnalysis::extractEdges: StructuredEdgeDetection didn't created "
+                << "Firstly call extractEdges or initializeStructuredDetector" << std::endl;
             return edges;
         }
 
@@ -93,52 +82,6 @@ namespace EBPTns {
             edges.push_back(edge);
         }
 
-        std::sort(edges.begin(), edges.end(),
-            [](const auto& a, const auto& b) {
-                return a.getLength() > b.getLength();
-            });
-        return edges;
-    }
-
-    std::vector<Edge> TextureAnalysis::extractEdges(const cv::Mat& image) {
-        std::vector<Edge> edges;
-        if (image.empty()) {
-            return edges;
-        }
-        cv::Mat gray;
-        if (image.channels() == 3) {
-            cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
-        }
-        else {
-            gray = image.clone();
-        }
-        cv::Mat blurred;
-        cv::GaussianBlur(gray, blurred, cv::Size(5, 5), 1.5);
-        cv::Mat edges_image;
-        cv::Canny(blurred, edges_image,
-            canny_low_threshold_,
-            canny_high_threshold_);
-        auto contours = findContours(edges_image);
-        for (const auto& contour : contours) {
-            if (contour.size() < min_edge_length_) continue;
-            //auto& simplified = contour;
-            //float length = 0;
-            //for (size_t i = 1; i < simplified.size(); ++i) {
-            //    float dx = simplified[i].x - simplified[i - 1].x;
-            //    float dy = simplified[i].y - simplified[i - 1].y;
-            //    length += std::sqrt(dx * dx + dy * dy);
-            //}
-            //if (length < min_edge_length_) {
-            //    continue;
-            //}
-            Edge edge(contour);
-            //if (edge.getLength() < min_edge_length_) continue;
-            edges.push_back(edge);
-        }
-        std::sort(edges.begin(), edges.end(),
-            [](const Edge& a, const Edge& b) {
-                return a.getLength() > b.getLength();
-            });
         return edges;
     }
 
@@ -166,24 +109,6 @@ namespace EBPTns {
         return simplified;
     }
 
-    bool TextureAnalysis::shouldGroup(const Edge& edge1, const Edge& edge2) const {
-        cv::Point2f center1 = edge1.getCenter();
-        cv::Point2f center2 = edge2.getCenter();
-        float dx = center1.x - center2.x;
-        float dy = center1.y - center2.y;
-        float distance = std::sqrt(dx * dx + dy * dy);
-        if (distance > grouping_distance_) {
-            return false;
-        }
-        float angle1 = edge1.getAngle();
-        float angle2 = edge2.getAngle();
-        float angle_diff = std::abs(angle1 - angle2);
-        if (angle_diff > CV_PI / 2) {
-            angle_diff = CV_PI - angle_diff;
-        }
-        return true;
-    }
-
     /////////////////////////////
     // Суперпиксели
     /////////////////////////////
@@ -195,7 +120,7 @@ namespace EBPTns {
             << ", ruler=" << ruler << ", threshold=" << sp_threshold << std::endl;
     }
 
-    cv::Mat TextureAnalysis::computeSuperpixels(const cv::Mat& image) {
+    cv::Mat TextureAnalysis::computeSuperpixels(const cv::Mat& image) const {
 
         // Конвертируем в LAB цветовое пространство (лучше для суперпикселей)
         cv::Mat lab_image;
@@ -224,54 +149,6 @@ namespace EBPTns {
         return labels;
     }
 
-    std::unordered_map<int, std::vector<Edge>> TextureAnalysis::assignEdgesToSuperpixels(
-        const std::vector<Edge>& edges, const cv::Mat& labels) {
-
-        std::unordered_map<int, std::vector<Edge>> superpixel_map;
-
-        if (labels.empty()) {
-            std::cerr << "labels is empty" << std::endl;
-            return superpixel_map;
-        }
-
-        for (const auto& edge : edges) {
-            cv::Point2f center = edge.getCenter();
-            int x = static_cast<int>(center.x);
-            int y = static_cast<int>(center.y);
-
-            if (x < 0 || x >= labels.cols || y < 0 || y >= labels.rows) {
-                continue;
-            }
-
-            int sp_id = labels.at<int>(y, x);
-            superpixel_map[sp_id].push_back(edge);
-        }
-
-        std::cout << "   Superpixels with edges " << superpixel_map.size() << std::endl;
-
-        // Подсчет суперпикселей с разным количеством ребер
-        int empty_sp = 0;
-        int sp_with_1 = 0;
-        int sp_with_2_5 = 0;
-        int sp_with_6_plus = 0;
-
-        for (const auto& [sp_id, sp_edges] : superpixel_map) {
-            size_t count = sp_edges.size();
-            if (count == 0) empty_sp++;
-            else if (count == 1) sp_with_1++;
-            else if (count <= 5) sp_with_2_5++;
-            else sp_with_6_plus++;
-        }
-
-        std::cout << "   Статистика суперпикселей:" << std::endl;
-        std::cout << "     - Пустых: " << empty_sp << std::endl;
-        std::cout << "     - С 1 ребром: " << sp_with_1 << std::endl;
-        std::cout << "     - С 2-5 ребрами: " << sp_with_2_5 << std::endl;
-        std::cout << "     - С 6+ ребрами: " << sp_with_6_plus << std::endl;
-
-        return superpixel_map;
-    }
-
     void TextureAnalysis::classifySourceGroups(std::vector<SourceGroupInfo>& source_groups) {
         const bool USE_RADIAL_SPRED = true;
         if (source_groups.empty()) return;
@@ -281,7 +158,10 @@ namespace EBPTns {
 
         for (const auto& group_info : source_groups) {
             float size = USE_RADIAL_SPRED ? group_info.group.getRadialSpread() : cv::contourArea(group_info.hull);
-            if (size == 0) continue;
+            //std::cout << "group_sizes " << size << std::endl;
+            //if (size == 0) {
+            //    continue;
+            //}
             group_sizes.push_back(size);
         }
 
@@ -419,7 +299,7 @@ namespace EBPTns {
         }
     }
 
-    AnalysisResult TextureAnalysis::analyzeTextureWithSuperpixelsStructured(
+    AnalysisResult TextureAnalysis::analyzeTexture(
         const cv::Mat& input_image,
         const std::string& model_path) {
 
@@ -449,13 +329,13 @@ namespace EBPTns {
         //ImageDisplay::saveAndShow("probability_map.png", "probability", prob_map_display);
 
         // Edges
-        std::vector<Edge> edges = extractEdgesStructured(input_image, edge_probability_map);
+        std::vector<Edge> edges = extractEdges(input_image, edge_probability_map);
         if (edges.empty()) {
             std::cerr << "Any edge didn't found" << std::endl;
             return AnalysisResult();
         }
         //cv::Mat edges_visualization = ImageDisplay::visualizeEdges(input_image, edges);
-        //ImageDisplay::setPartFinalVisualization(edges_visualization, ImageDisplay::edges);
+        //ImageDisplay::save("edges.png", edges_visualization);
 
         ImageDisplay::visualizeAllChainCodes(edges, input_image, "images/chain_code_debug.png");
         //ImageDisplay::visualizeAnglesOnly(edges, input_image, "images/angles_directions.png");
@@ -500,15 +380,18 @@ namespace EBPTns {
         // Создаем композитное изображение: исходное + суперпиксели + ребра
         //ImageDisplay::visualiseSPWithEdges(input_image, sp_visualization, edges_visualization);
 
-        EBPT ebpt_model(input_image);
-        cv::Size size = input_image.size();
+        std::sort(source_infos.begin(), source_infos.end(),
+        [](const SourceGroupInfo& a, const SourceGroupInfo& b) {
+            return a.group.getRadialSpread() > b.group.getRadialSpread();
+        });
         classifySourceGroups(source_infos);
+
+        cv::Size size = input_image.size();
 
         int cnt = 1;
         for (auto& group : source_infos) {
-            group.mask = getMask(group.group, size, group.hull);
+            group.hull = computeHull(group.group);
             group.group.setIndex(cnt++);
-            ebpt_model.addEdgeGroup(group);
             std::string s = "Patch before" + std::to_string(cnt);
             std::string s1 = "Mask before" + std::to_string(cnt);
             //ImageDisplay::show(s1, group.mask);
@@ -516,39 +399,24 @@ namespace EBPTns {
 
 
         cv::Mat groups_hull_visualization = ImageDisplay::visualizeGroups(input_image, source_infos);
-        ImageDisplay::setPartFinalVisualization(groups_hull_visualization, ImageDisplay::groups);
+        ImageDisplay::saveAndShowWithSize("groups.png", "Edge Groups", groups_hull_visualization, cv::Size(groups_hull_visualization.cols, groups_hull_visualization.rows));
 
-        AnalysisResult result(ebpt_model, superpixel_labels);
+        //ImageDisplay::setPartFinalVisualization(groups_hull_visualization, ImageDisplay::groups);
+
+        AnalysisResult result(source_infos);
 
         return result;
     }
 
-
-    cv::Mat TextureAnalysis::getMask(const EdgeGroup& group, const cv::Size& image_size, std::vector<cv::Point>& hull) {
+    std::vector<cv::Point> TextureAnalysis::computeHull(const EdgeGroup& group) {
         std::vector<cv::Point> all_points = group.getAllPoints();
+        std::vector<cv::Point> hull;
 
         if (all_points.empty()) {
-            return cv::Mat::zeros(image_size, CV_8UC1);
+            return hull;
         }
 
-        // Вычисляем выпуклую оболочку
         cv::convexHull(all_points, hull);
-
-        // Создаем маску
-        cv::Mat mask = cv::Mat::zeros(image_size, CV_8UC1);
-
-        if (hull.size() >= 3) {
-            std::vector<std::vector<cv::Point>> hull_contour = { hull };
-            cv::fillPoly(mask, hull_contour, cv::Scalar(255));
-        }
-        else {
-            for (const auto& p : all_points) {
-                if (p.x >= 0 && p.x < image_size.width && p.y >= 0 && p.y < image_size.height) {
-                    mask.at<uchar>(p.y, p.x) = 255;
-                }
-            }
-        }
-
-        return mask;
+        return hull;
     }
 }

@@ -5,16 +5,11 @@
 #include <random>
 #include "EdgeGroup.h"
 #include "PlacedGroup.h" 
-#include "EBPT.h"
 
 namespace EBPTns {
 
     class PixelSynthesis {
     public:
-        PixelSynthesis();
-
-        cv::Mat copyWithMask(const cv::Mat& source, const cv::Mat& mask,
-            const cv::Rect& source_bbox, const cv::Rect& target_bbox);
 
         cv::Mat fillPixels(
             const cv::Mat& input_image,
@@ -22,13 +17,10 @@ namespace EBPTns {
             const std::vector<PlacedGroup>& placed_groups,
             const cv::Size& size);
 
-        void setRandomSeed(unsigned int seed);
-
     private:
         std::mt19937 rng_;
 
-        void blendPatches(cv::Mat& output, const cv::Mat& patch,
-            const cv::Rect& bbox, float alpha = 1.0f);
+        void GaussianCopy(const cv::Mat& binary_mask, const cv::Mat& patch_part, cv::Mat& output, const cv::Rect& target_bbox);
     };
 
 }

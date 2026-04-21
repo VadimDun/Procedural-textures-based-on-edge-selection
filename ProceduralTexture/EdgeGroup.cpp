@@ -73,18 +73,17 @@ namespace EBPTns {
         }
 
         float max_distance = 0.0f;
-
         for (const auto& edge : edges_) {
-            cv::Point2f edge_center = edge.getCenter();
-            float dx = edge_center.x - center_.x;
-            float dy = edge_center.y - center_.y;
-            float distance = std::sqrt(dx * dx + dy * dy);
+            for (const auto& point : edge.getPoints()) {
+                float dx = static_cast<float>(point.x) - center_.x;
+                float dy = static_cast<float>(point.y) - center_.y;
+                float distance = std::sqrt(dx * dx + dy * dy);
 
-            if (distance > max_distance) {
-                max_distance = distance;
+                if (distance > max_distance) {
+                    max_distance = distance;
+                }
             }
         }
-
         radial_spread_ = max_distance;
     }
 
