@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <opencv2/opencv.hpp>
+#include <chrono>
 
 #include "Edge.h"
 #include "EdgeGroup.h"
@@ -51,6 +52,7 @@ static cv::Mat loadRealTexture(const std::string& path) {
 
 int main(int argc, char** argv) {
     setlocale(LC_ALL, "ru");
+    auto prog_start = std::chrono::high_resolution_clock::now();
 
     bool use_real_texture = false;
     std::string texture_path;
@@ -96,8 +98,13 @@ int main(int argc, char** argv) {
     }
 
     std::cout << "\n\n---------------------analyzeTextureWithSuperpixelsStructured---------------------\n\n" << std::endl;
+    auto analyze_start = std::chrono::high_resolution_clock::now();
     auto result = analyzer.analyzeTexture(input_image, MODEL_PATH);
     if (!result.isValid()) { return 1; }
+
+    auto analyze_end = std::chrono::high_resolution_clock::now();
+    auto analyze_duration = std::chrono::duration_cast<std::chrono::milliseconds>(analyze_end - analyze_start);
+    std::cout << "Analyze time: " << analyze_duration.count() / 1000.0 << " sec" << std::endl;
 
     /////////////////////////////
     // Бины
@@ -199,6 +206,10 @@ int main(int argc, char** argv) {
     cv::Mat output_texture = pixel_synthesis.fillPixels(
         input_image, source_groups, placed_groups, outSize);
     ImageDisplay::saveAndShowWithSize("output_texture.png", "Output Texture", output_texture, outSize);
+
+    auto prog_end = std::chrono::high_resolution_clock::now();
+    auto prog_duration = std::chrono::duration_cast<std::chrono::milliseconds>(analyze_end - analyze_start);
+    std::cout << "Time of work: " << analyze_duration.count() / 1000.0 << " sec" << std::endl;
 
     bool running = true;
     while (running) {

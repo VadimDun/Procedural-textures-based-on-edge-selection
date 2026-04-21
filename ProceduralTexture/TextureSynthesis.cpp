@@ -3,6 +3,7 @@
 #include <cmath>
 #include <iostream>
 #include <algorithm>
+#include <chrono>
 #include "TextureAnalysis.h"
 #include "ImageDisplay.h"
 
@@ -506,6 +507,7 @@ namespace EBPTns {
         const std::vector<SourceGroupInfo>& source_groups) {
 
         std::vector<PlacedGroup> all_placed_groups;
+        auto total_start = std::chrono::high_resolution_clock::now();
 
         occupancy_map_ = cv::Mat::zeros(outputSize.height, outputSize.width, CV_8UC1);
 
@@ -528,6 +530,7 @@ namespace EBPTns {
                 continue;
             }
 
+            auto level_start = std::chrono::high_resolution_clock::now();
             if (level == ScaleLevel::MEDIUM) {
                 erodeOccupancyMap(20);                               
             }
@@ -551,7 +554,7 @@ namespace EBPTns {
             int overlap_count = 0;
             int max_attempts_per_group = 1000;
             int total_attempts = 0;
-            const int MAX_TOTAL_ATTEMPTS = 10000;
+            const int MAX_TOTAL_ATTEMPTS = 1000;
 
             while (current_fill < target_fill && total_attempts < MAX_TOTAL_ATTEMPTS) {
                 total_attempts++;
@@ -565,7 +568,8 @@ namespace EBPTns {
                 {
                     float radius;
                     position = findLargestEmptyLocation(radius);
-                    //if (radius < 5.0f)
+                    int min_group_size = level_groups[level_groups.size() - 1]->group.getRadialSpread();
+                    //if (radius < min_group_size * 0.3)
                     //    break;
 
                     float desired_size = radius * 2.0f;
@@ -656,14 +660,22 @@ namespace EBPTns {
                 ImageDisplay::showOccupancyMap(occupancy_map_, "Occupancy after " + scaleLevelToString(level));
             }
 
+            auto level_end = std::chrono::high_resolution_clock::now();
+            auto level_duration = std::chrono::duration_cast<std::chrono::milliseconds>(level_end - level_start);
+
             std::cout << "  Finished " << scaleLevelToString(level)
                 << ": placed " << placed_count << " groups"
                 << ", fill: " << (current_fill * 100) << "%"
-                << " (overlaps: " << overlap_count << ")" << std::endl;
+                << " (overlaps: " << overlap_count << ")"
+                << ", time: " << level_duration.count() / 1000.0 << " sec" << std::endl;
         }
+
+        auto total_end = std::chrono::high_resolution_clock::now();
+        auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(total_end - total_start);
 
         float total_filled = cv::countNonZero(occupancy_map_) / (float)(occupancy_map_.total());
         std::cout << "\nFinal occupancy: " << (total_filled * 100) << "%" << std::endl;
+        std::cout << "Total time: " << total_duration.count() / 1000.0 << " sec" << std::endl;
 
         if (total_filled < 0.95f) {
             std::cout << "Warning: Final occupancy (" << (total_filled * 100)

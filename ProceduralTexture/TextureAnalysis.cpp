@@ -155,15 +155,13 @@ namespace EBPTns {
 
         std::vector<float> group_sizes;
         group_sizes.reserve(source_groups.size());
-        std::cout << "source_groups.size()=" << source_groups.size() << std::endl;
 
         for (const auto& group_info : source_groups) {
             float size = USE_RADIAL_SPRED ? group_info.group.getRadialSpread() : cv::contourArea(group_info.hull);
-            std::cout << "group_sizes " << size << std::endl;
-            if (size == 0) {
-                continue;
-
-            }
+            //std::cout << "group_sizes " << size << std::endl;
+            //if (size == 0) {
+            //    continue;
+            //}
             group_sizes.push_back(size);
         }
 
@@ -171,7 +169,6 @@ namespace EBPTns {
         std::sort(sorted_sizes.begin(), sorted_sizes.end());
 
         size_t n = sorted_sizes.size();
-        std::cout << "n=" << n << std::endl;
 
         // СТРАТЕГИЯ 1: Поиск естественных разрывов
         std::vector<float> gaps;
@@ -188,9 +185,9 @@ namespace EBPTns {
         std::sort(sorted_indices.begin(), sorted_indices.end(),
             [&gaps](int a, int b) { return gaps[a] > gaps[b]; });
 
-        for (size_t i = 0; i < n-1; ++i) {
-            std::cout << "sorted gap " << i << ": " << gaps[sorted_indices[i]] << std::endl;
-        }
+        //for (size_t i = 0; i < n-1; ++i) {
+        //    std::cout << "sorted gap " << i << ": " << gaps[sorted_indices[i]] << std::endl;
+        //}
 
         // Используем 2 наибольших разрыва для разделения на 3 категории (крупные/средние/мелкие)
         if (n >= 4 && sorted_indices.size() >= 2) {
@@ -338,7 +335,7 @@ namespace EBPTns {
             return AnalysisResult();
         }
         //cv::Mat edges_visualization = ImageDisplay::visualizeEdges(input_image, edges);
-        //ImageDisplay::setPartFinalVisualization(edges_visualization, ImageDisplay::edges);
+        //ImageDisplay::save("edges.png", edges_visualization);
 
         ImageDisplay::visualizeAllChainCodes(edges, input_image, "images/chain_code_debug.png");
         //ImageDisplay::visualizeAnglesOnly(edges, input_image, "images/angles_directions.png");
