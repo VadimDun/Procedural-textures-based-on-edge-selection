@@ -89,6 +89,23 @@ x64/
 *.recipe
 *.FileListAbsolute.txt
 
+# Qt Creator / Qt Build Artifacts
+*.pro.user
+*.pro.user.*
+CMakeLists.txt.user*
+.qmake.cache
+.qmake.stash
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+*.moc
+
+# Qt Creator user data & temporary build files
+*.qtvscr
+*.qtvstc
+*Procedur.*/
+*.[0-9a-f]{8}*/
+
 \images
 \model.yml
 
