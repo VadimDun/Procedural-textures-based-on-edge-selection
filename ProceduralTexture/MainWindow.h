@@ -31,7 +31,6 @@ private slots:
     void onLoadImage();
     void onAnalyze();
     void onSynthesize();
-    void onRegenerate();
     void onCancel();
     void onSaveResult();
     void onSavePlacement();
@@ -46,6 +45,10 @@ private slots:
     void onSynthesisPlacementUpdated(const cv::Mat& placementMap);
     void onSynthesisTextureUpdated(const cv::Mat& texture);
 
+    void onLargeFillChanged(int value);
+    void onMediumFillChanged(int value);
+    void onSmallFillChanged(int value);
+
 private:
     void setupUi();
     void createMenuBar();
@@ -57,7 +60,7 @@ private:
     void updateButtonStates();
     void updateParameterVisibility();
 
-    void displayImage(const cv::Mat& image, QLabel* label, int maxWidth = 400);
+    void displayImage(const cv::Mat& image, QLabel* label, int maxWidth = 700);
     QPixmap cvMatToQPixmap(const cv::Mat& mat);
 
     std::unique_ptr<AppController> controller_;
@@ -78,7 +81,6 @@ private:
     QPushButton* loadImageButton_;
     QPushButton* analyzeButton_;
     QPushButton* synthesizeButton_;
-    QPushButton* regenerateButton_;
     QPushButton* cancelButton_;
     QPushButton* saveResultButton_;
     QPushButton* savePlacementButton_;
@@ -101,6 +103,10 @@ private:
     QSpinBox* randomSeedSpin_;
     QDoubleSpinBox* densitySpin_;
     QDoubleSpinBox* scaleSpin_;
+
+    QSpinBox* largeFillSpin_;
+    QSpinBox* mediumFillSpin_;
+    QSpinBox* smallFillSpin_;
 
     // Состояние
     bool isAnalyzed_ = false;

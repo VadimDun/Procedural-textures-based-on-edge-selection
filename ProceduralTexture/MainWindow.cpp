@@ -79,7 +79,11 @@ void MainWindow::setupUi() {
 
     progressBar_ = new QProgressBar();
     progressBar_->setMaximumWidth(200);
+    progressBar_->setMinimumWidth(100);
     progressBar_->setVisible(false);
+    progressBar_->setRange(0, 100);
+    progressBar_->setValue(0);
+    progressBar_->setTextVisible(true);
     statusBar()->addPermanentWidget(progressBar_);
 }
 
@@ -131,11 +135,6 @@ void MainWindow::createToolBar() {
     synthesizeButton_->setEnabled(false);
     connect(synthesizeButton_, &QPushButton::clicked, this, &MainWindow::onSynthesize);
     toolBar->addWidget(synthesizeButton_);
-
-    regenerateButton_ = new QPushButton("Regenerate");
-    regenerateButton_->setEnabled(false);
-    connect(regenerateButton_, &QPushButton::clicked, this, &MainWindow::onRegenerate);
-    toolBar->addWidget(regenerateButton_);
 
     toolBar->addSeparator();
 
@@ -276,7 +275,58 @@ void MainWindow::createParametersPanel() {
         [this](int v) { controller_->setRandomSeed(static_cast<unsigned int>(v)); });
     synthesisLayout->addWidget(randomSeedSpin_, 4, 1);
 
+    // Добавляем разделитель
+    QFrame* line = new QFrame();
+    line->setFrameShape(QFrame::HLine);
+    line->setFrameShadow(QFrame::Sunken);
+    synthesisLayout->addWidget(line, 5, 0, 1, 2);
+
+    synthesisLayout->addWidget(new QLabel("Large Elements Fill %:"), 6, 0);
+    largeFillSpin_ = new QSpinBox();
+    largeFillSpin_->setRange(0, 100);
+    largeFillSpin_->setValue(50);
+    largeFillSpin_->setSuffix(" %");
+    largeFillSpin_->setToolTip("Target fill percentage for large elements (0-100%)");
+    connect(largeFillSpin_, QOverload<int>::of(&QSpinBox::valueChanged),
+        this, &MainWindow::onLargeFillChanged);
+    synthesisLayout->addWidget(largeFillSpin_, 6, 1);
+
+    synthesisLayout->addWidget(new QLabel("Medium Elements Fill %:"), 7, 0);
+    mediumFillSpin_ = new QSpinBox();
+    mediumFillSpin_->setRange(0, 100);
+    mediumFillSpin_->setValue(85);
+    mediumFillSpin_->setSuffix(" %");
+    mediumFillSpin_->setToolTip("Target fill percentage for medium elements (0-100%)");
+    connect(mediumFillSpin_, QOverload<int>::of(&QSpinBox::valueChanged),
+        this, &MainWindow::onMediumFillChanged);
+    synthesisLayout->addWidget(mediumFillSpin_, 7, 1);
+
+    synthesisLayout->addWidget(new QLabel("Small Elements Fill %:"), 8, 0);
+    smallFillSpin_ = new QSpinBox();
+    smallFillSpin_->setRange(0, 100);
+    smallFillSpin_->setValue(98);
+    smallFillSpin_->setSuffix(" %");
+    smallFillSpin_->setToolTip("Target fill percentage for small elements (0-100%)");
+    connect(smallFillSpin_, QOverload<int>::of(&QSpinBox::valueChanged),
+        this, &MainWindow::onSmallFillChanged);
+    synthesisLayout->addWidget(smallFillSpin_, 8, 1);
+
     updateParameterVisibility();
+}
+
+void MainWindow::onLargeFillChanged(int value) {
+    controller_->setLargeFillPercentage(value);
+    onLogMessage(QString("Large fill percentage changed to: %1%").arg(value));
+}
+
+void MainWindow::onMediumFillChanged(int value) {
+    controller_->setMediumFillPercentage(value);
+    onLogMessage(QString("Medium fill percentage changed to: %1%").arg(value));
+}
+
+void MainWindow::onSmallFillChanged(int value) {
+    controller_->setSmallFillPercentage(value);
+    onLogMessage(QString("Small fill percentage changed to: %1%").arg(value));
 }
 
 void MainWindow::updateParameterVisibility() {
@@ -359,13 +409,11 @@ void MainWindow::updateButtonStates() {
     bool hasImage = controller_->hasImage();
     bool canAnalyze = hasImage && !isAnalyzing_ && !isSynthesizing_;
     bool canSynthesize = hasImage && !isAnalyzing_ && !isSynthesizing_ && isAnalyzed_;
-    bool canRegenerate = canSynthesize;
     bool canSave = !isAnalyzing_ && !isSynthesizing_;
 
     loadImageButton_->setEnabled(!isAnalyzing_ && !isSynthesizing_);
     analyzeButton_->setEnabled(canAnalyze);
     synthesizeButton_->setEnabled(canSynthesize && controller_->hasImage());
-    regenerateButton_->setEnabled(canRegenerate);
     cancelButton_->setEnabled(isAnalyzing_ || isSynthesizing_);
     saveResultButton_->setEnabled(canSave && !controller_->getOutputTexture().empty());
     savePlacementButton_->setEnabled(canSave && !controller_->getPlacementMap().empty());
@@ -416,6 +464,7 @@ void MainWindow::displayImage(const cv::Mat& image, QLabel* label, int maxWidth)
     }
 
     label->setPixmap(pixmap);
+    //label->setFixedSize(pixmap.size());
     label->setText(""); // Убираем текст-заглушку
 }
 
@@ -489,21 +538,6 @@ void MainWindow::onSynthesize() {
     statusLabel_->setText("Synthesizing texture...");
 
     controller_->synthesize();
-}
-
-void MainWindow::onRegenerate() {
-    // Перегенерация размещения без повторного анализа
-    isSynthesizing_ = true;
-    updateButtonStates();
-
-    placementImageLabel_->setText("Regenerating placement...");
-    placementImageLabel_->setPixmap(QPixmap());
-    resultImageLabel_->setText("Regenerating texture...");
-    resultImageLabel_->setPixmap(QPixmap());
-
-    statusLabel_->setText("Regenerating placement...");
-
-    controller_->regeneratePlacement();
 }
 
 void MainWindow::onCancel() {

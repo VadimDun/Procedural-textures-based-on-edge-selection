@@ -48,7 +48,8 @@ public:
     SynthesisWorker(AppController* controller, const cv::Mat& image,
         const EBPTns::AnalysisResult* analysisResult,
         const cv::Size& outputSize, bool enableRotation,
-        float angleSpread, unsigned int seed);
+        float angleSpread, unsigned int seed,
+        float largeFillPercentage, float mediumFillPercentage, float smallFillPercentage);
 
 public slots:
     void doWork();
@@ -62,12 +63,14 @@ signals:
 private:
     AppController* controller_;
     cv::Mat image_;
-    std::unique_ptr<EBPTns::TextureSynthesis> textureSynthesis_;
     const EBPTns::AnalysisResult* analysisResult_;
     cv::Size outputSize_;
     bool enableRotation_;
     float angleSpread_;
     unsigned int seed_;
+    float largeFillPercentage_;
+    float mediumFillPercentage_;
+    float smallFillPercentage_;
 };
 
 // ======================== AppController Declaration ========================
@@ -96,10 +99,17 @@ public:
     void setAngleSpread(float spread) { angleSpread_ = spread; }
     void setRandomSeed(unsigned int seed) { randomSeed_ = seed; }
 
+    void setLargeFillPercentage(int percent) { largeFillPercentage_ = percent / 100.0f; }
+    void setMediumFillPercentage(int percent) { mediumFillPercentage_ = percent / 100.0f; }
+    void setSmallFillPercentage(int percent) { smallFillPercentage_ = percent / 100.0f; }
+
+    int getLargeFillPercentageInt() const { return static_cast<int>(largeFillPercentage_ * 100); }
+    int getMediumFillPercentageInt() const { return static_cast<int>(mediumFillPercentage_ * 100); }
+    int getSmallFillPercentageInt() const { return static_cast<int>(smallFillPercentage_ * 100); }
+
     // Действия
     void analyze();
     void synthesize();
-    void regeneratePlacement();
     void cancel();
 
     // Получение результатов
@@ -109,6 +119,9 @@ public:
     const EBPTns::AnalysisResult* getAnalysisResult() const;
     void setPlacementMap(const cv::Mat& map);
     void setOutputTexture(const cv::Mat& texture);
+
+    std::shared_ptr<EBPTns::TextureSynthesis> getOrCreateTextureSynthesis(
+        const cv::Size& outputSize, bool enableRotation, unsigned int seed);
 
 signals:
     void analysisStarted();
@@ -136,6 +149,8 @@ private:
     // Результаты анализа
     std::unique_ptr<EBPTns::AnalysisResult> analysisResult_;
 
+    std::shared_ptr<EBPTns::TextureSynthesis> textureSynthesis_;
+
     // Параметры
     int minEdgeLength_ = 15;
     int superpixelRegionSize_ = 120;
@@ -146,6 +161,10 @@ private:
     bool enableRotation_ = true;
     float angleSpread_ = 0.1f;
     unsigned int randomSeed_ = 42;
+
+    float largeFillPercentage_ = 0.5f;
+    float mediumFillPercentage_ = 0.85f;
+    float smallFillPercentage_ = 0.98f;
 
     // Состояние
     bool isCancelled_ = false;

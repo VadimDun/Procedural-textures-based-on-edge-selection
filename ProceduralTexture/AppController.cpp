@@ -90,15 +90,18 @@ void AnalysisWorker::doWork() {
 SynthesisWorker::SynthesisWorker(AppController* controller, const cv::Mat& image,
     const EBPTns::AnalysisResult* analysisResult,
     const cv::Size& outputSize, bool enableRotation,
-    float angleSpread, unsigned int seed)
-    : QObject(nullptr)
-    , controller_(controller)
+    float angleSpread, unsigned int seed,
+    float largeFillPercentage, float mediumFillPercentage, float smallFillPercentage)
+    : controller_(controller)
     , image_(image)
     , analysisResult_(analysisResult)
     , outputSize_(outputSize)
     , enableRotation_(enableRotation)
     , angleSpread_(angleSpread)
     , seed_(seed)
+    , largeFillPercentage_(largeFillPercentage)
+    , mediumFillPercentage_(mediumFillPercentage)
+    , smallFillPercentage_(smallFillPercentage)
 {
 }
 
@@ -111,20 +114,14 @@ void SynthesisWorker::doWork() {
 
         emit progress(10);
 
-        if (!textureSynthesis_
-            || textureSynthesis_->getOutputSize() != outputSize_ ||
-            textureSynthesis_->isRotationEnabled() != enableRotation_ ||
-            textureSynthesis_->getRandomSeed() != seed_
-            ) {
-            textureSynthesis_ = std::make_unique<EBPTns::TextureSynthesis>(outputSize_, enableRotation_);
-			textureSynthesis_->setRandomSeed(seed_);
-            std::cout << "===========================created new textureSynthesis_" << std::endl;
-        }
-        else {
-            std::cout << "===========================reusing existing textureSynthesis_" << std::endl;
-        }
-        textureSynthesis_->setRandomSeed(seed_);
-        textureSynthesis_->setAvoidOverlap(true);
+        auto textureSynthesis = controller_->getOrCreateTextureSynthesis(
+            outputSize_, enableRotation_, seed_);
+
+        textureSynthesis->setTargetFillPercentage(
+            largeFillPercentage_,
+            mediumFillPercentage_,
+            smallFillPercentage_
+        );
 
         emit progress(30);
 
@@ -133,7 +130,7 @@ void SynthesisWorker::doWork() {
             return;
         }
 
-        auto placedGroups = textureSynthesis_->synthesizeHierarchicalPlacement(
+        auto placedGroups = textureSynthesis->synthesizeHierarchicalPlacement(
             image_, analysisResult_->source_groups);
 
         emit progress(60);
@@ -305,45 +302,49 @@ void AppController::analyze() {
 }
 
 void AppController::synthesize() {
-    if (!isAnalyzed_ || !analysisResult_) {
-        emit synthesisFinished(false, "Please run analysis first");
+    if (!analysisResult_ || !analysisResult_->isValid()) {
+        emitLog("No valid analysis result. Please run analysis first.");
+        emit synthesisFinished(false, "No analysis result");
         return;
     }
 
-    isCancelled_ = false;
+    if (originalImage_.empty()) {
+        emitLog("No original image loaded");
+        emit synthesisFinished(false, "No image loaded");
+        return;
+    }
+
     emit synthesisStarted();
-    emitLog("Starting texture synthesis...");
-
-    cv::Size outputSize(outputWidth_, outputHeight_);
-
-    SynthesisWorker* worker = new SynthesisWorker(this, originalImage_,
-        analysisResult_.get(), outputSize, enableRotation_, angleSpread_, randomSeed_);
 
     QThread* thread = new QThread();
+    SynthesisWorker* worker = new SynthesisWorker(
+        this,
+        originalImage_,
+        analysisResult_.get(),
+        cv::Size(outputWidth_, outputHeight_),
+        enableRotation_,
+        angleSpread_,
+        randomSeed_,
+        largeFillPercentage_,
+        mediumFillPercentage_,
+        smallFillPercentage_
+    );
+
     worker->moveToThread(thread);
 
     // Подключаем сигналы
     connect(thread, &QThread::started, worker, &SynthesisWorker::doWork);
-    connect(worker, &SynthesisWorker::finished, this, [this, thread, worker](bool success, const QString& msg) {
-        emit synthesisFinished(success, msg);
-        thread->quit();
-        worker->deleteLater();
-        thread->deleteLater();
-        });
+    connect(worker, &SynthesisWorker::finished, thread, &QThread::quit);
+    connect(worker, &SynthesisWorker::finished, worker, &SynthesisWorker::deleteLater);
+    connect(thread, &QThread::finished, thread, &QThread::deleteLater);
+
+    // Проксируем сигналы
     connect(worker, &SynthesisWorker::progress, this, &AppController::synthesisProgress);
+    connect(worker, &SynthesisWorker::finished, this, &AppController::synthesisFinished);
     connect(worker, &SynthesisWorker::placementReady, this, &AppController::synthesisPlacementUpdated);
     connect(worker, &SynthesisWorker::textureReady, this, &AppController::synthesisTextureUpdated);
 
-    // Обработка ошибок потока
-    connect(thread, &QThread::finished, thread, &QThread::deleteLater);
-
     thread->start();
-}
-
-void AppController::regeneratePlacement() {
-    if (isAnalyzed_) {
-        synthesize();
-    }
 }
 
 void AppController::cancel() {
@@ -375,4 +376,25 @@ void AppController::setPlacementMap(const cv::Mat& map) {
 
 void AppController::setOutputTexture(const cv::Mat& texture) {
     outputTexture_ = texture;
+}
+
+std::shared_ptr<EBPTns::TextureSynthesis> AppController::getOrCreateTextureSynthesis(
+    const cv::Size& outputSize, bool enableRotation, unsigned int seed) {
+
+    // Проверяем, нужно ли создать новый синтезатор
+    bool needsNew = !textureSynthesis_ ||
+        textureSynthesis_->getOutputSize() != outputSize ||
+        textureSynthesis_->isRotationEnabled() != enableRotation ||
+        textureSynthesis_->getRandomSeed() != seed;
+
+    if (needsNew) {
+        textureSynthesis_ = std::make_shared<EBPTns::TextureSynthesis>(outputSize, enableRotation);
+        textureSynthesis_->setRandomSeed(seed);
+        std::cout << "===========================created new textureSynthesis_" << std::endl;
+    }
+    else {
+        std::cout << "===========================reusing existing textureSynthesis_" << std::endl;
+    }
+
+    return textureSynthesis_;
 }
