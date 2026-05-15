@@ -60,8 +60,10 @@ private:
     void updateButtonStates();
     void updateParameterVisibility();
 
-    void displayImage(const cv::Mat& image, QLabel* label, int maxWidth = 700);
+    void displayImage(const cv::Mat& image, QLabel* label, int maxWidth = 600);
     QPixmap cvMatToQPixmap(const cv::Mat& mat);
+
+    bool saveImageViaQt(const cv::Mat& image, const QString& filePath);
 
     std::unique_ptr<AppController> controller_;
 

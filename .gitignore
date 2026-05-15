@@ -107,6 +107,7 @@ qrc_*.cpp
 *.[0-9a-f]{8}*/
 
 \images
+\outputs
 \model.yml
 
 Run.txt

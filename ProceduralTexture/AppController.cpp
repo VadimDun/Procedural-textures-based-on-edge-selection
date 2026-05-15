@@ -246,24 +246,6 @@ bool AppController::loadImage(const QString& path) {
     return true;
 }
 
-//bool AppController::loadImage(const QString& path) {
-//    cv::Mat img = cv::imread(path.toStdString());
-//    if (img.empty()) {
-//        emitLog("Failed to load image: " + path);
-//        return false;
-//    }
-//
-//    originalImage_ = img;
-//    resetState();
-//    isAnalyzed_ = false;
-//    analysisResult_.reset();
-//    placementMap_.release();
-//    outputTexture_.release();
-//
-//    emitLog("Image loaded: " + path +
-//        QString(" (%1x%2)").arg(img.cols).arg(img.rows));
-//    return true;
-//}
 
 void AppController::analyze() {
     if (originalImage_.empty()) {

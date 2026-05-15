@@ -209,7 +209,7 @@ void MainWindow::createParametersPanel() {
 
     analysisLayout->addWidget(new QLabel("Edge Threshold:"), 2, 0);
     thresholdSpin_ = new QDoubleSpinBox();
-    thresholdSpin_->setRange(0.05, 0.5);
+    thresholdSpin_->setRange(0.01, 0.5);
     thresholdSpin_->setSingleStep(0.05);
     thresholdSpin_->setValue(0.1);
     connect(thresholdSpin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
@@ -449,6 +449,29 @@ QPixmap MainWindow::cvMatToQPixmap(const cv::Mat& mat) {
     return QPixmap::fromImage(img);
 }
 
+bool MainWindow::saveImageViaQt(const cv::Mat& image, const QString& filePath) {
+    if (image.empty()) {
+        return false;
+    }
+
+    cv::Mat rgb;
+
+    if (image.channels() == 3) {
+        cv::cvtColor(image, rgb, cv::COLOR_BGR2RGB);
+    }
+    else if (image.channels() == 1) {
+        cv::cvtColor(image, rgb, cv::COLOR_GRAY2RGB);
+    }
+    else {
+        return false;
+    }
+
+    QImage qimg(rgb.data, rgb.cols, rgb.rows, rgb.step, QImage::Format_RGB888);
+    QImage copy = qimg.copy();
+
+    return copy.save(filePath);
+}
+
 void MainWindow::displayImage(const cv::Mat& image, QLabel* label, int maxWidth) {
     if (image.empty()) {
         label->setText("No image");
@@ -558,9 +581,14 @@ void MainWindow::onSaveResult() {
         "PNG (*.png);;JPEG (*.jpg *.jpeg);;BMP (*.bmp)");
 
     if (!fileName.isEmpty()) {
-        cv::imwrite(fileName.toStdString(), result);
-        statusLabel_->setText("Result saved to " + fileName);
-        onLogMessage("Result saved to " + fileName);
+        if (saveImageViaQt(result, fileName)) {
+            statusLabel_->setText("Result saved to " + fileName);
+            onLogMessage("Result saved to " + fileName);
+        }
+        else {
+            statusLabel_->setText("Failed to save result");
+            QMessageBox::warning(this, "Error", "Failed to save image");
+        }
     }
 }
 
@@ -577,9 +605,14 @@ void MainWindow::onSavePlacement() {
         "PNG (*.png);;JPEG (*.jpg *.jpeg)");
 
     if (!fileName.isEmpty()) {
-        cv::imwrite(fileName.toStdString(), placement);
-        statusLabel_->setText("Placement map saved to " + fileName);
-        onLogMessage("Placement map saved to " + fileName);
+        if (saveImageViaQt(placement, fileName)) {
+            statusLabel_->setText("Placement map saved to " + fileName);
+            onLogMessage("Placement map saved to " + fileName);
+        }
+        else {
+            statusLabel_->setText("Failed to save placement map");
+            QMessageBox::warning(this, "Error", "Failed to save image");
+        }
     }
 }
 
