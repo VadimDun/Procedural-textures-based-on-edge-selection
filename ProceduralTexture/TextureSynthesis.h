@@ -31,20 +31,30 @@ namespace EBPTns {
             const std::vector<SourceGroupInfo>& source_groups);
 
 
+		void setOutputSize(const cv::Size& size) { outputSize = size; }
         void setRandomSeed(unsigned int seed);
-        void setAvoidOverlap(bool avoid) { avoid_overlap_ = avoid; }
+        void setTargetFillPercentage(float largePerc, float mediumPerc, float smallPerc) {
+            scale_params_[ScaleLevel::LARGE].percent_fill_target = largePerc;
+            scale_params_[ScaleLevel::MEDIUM].percent_fill_target = mediumPerc;
+            scale_params_[ScaleLevel::SMALL].percent_fill_target = smallPerc;
+		}
+
+		cv::Size getOutputSize() const { return outputSize; }
+		bool isRotationEnabled() const { return enable_rotation; }
+        unsigned int getRandomSeed() const { return seed_; }
 
     private:
         std::mt19937 rng_;
 
-        bool avoid_overlap_ = true;
+        bool enable_rotation = true;
         const int MIN_SIZE_PATCH = 300;
         cv::Size outputSize;
+        unsigned int seed_ = 42;
 
         std::map<ScaleLevel, ScaleLevelParams> scale_params_;
         cv::Mat occupancy_map_;  // Карта заполнения
 
-        void initScaleLevelParams(bool enable_rotation);
+        void initScaleLevelParams();
 
         // Вспомогательные методы
         void updateOccupancyMap(const PlacedGroup& group);

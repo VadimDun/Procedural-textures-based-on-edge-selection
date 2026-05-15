@@ -13,11 +13,11 @@ namespace EBPTns {
         outputSize = size;
         std::random_device rd;
         rng_ = std::mt19937(rd());
-
-        initScaleLevelParams(enable_rotation);
+		this->enable_rotation = enable_rotation;
+        initScaleLevelParams();
     }
 
-    void TextureSynthesis::initScaleLevelParams(bool enable_rotation) {
+    void TextureSynthesis::initScaleLevelParams() {
         // Параметры для крупного масштаба (структура)
         ScaleLevelParams large_params;
         large_params.base_scale = 1.0f;
@@ -50,6 +50,7 @@ namespace EBPTns {
 
     void TextureSynthesis::setRandomSeed(unsigned int seed) {
         rng_.seed(seed);
+        seed_ = seed;
     }
 
     float TextureSynthesis::generateRandomAngle(float variation) {
