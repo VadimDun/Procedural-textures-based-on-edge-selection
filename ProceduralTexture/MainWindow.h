@@ -101,6 +101,7 @@ private:
     QSpinBox* outputWidthSpin_;
     QSpinBox* outputHeightSpin_;
     QCheckBox* rotationCheckBox_;
+    QCheckBox* scalingCheckBox_;
     QDoubleSpinBox* angleSpreadSpin_;
     QSpinBox* randomSeedSpin_;
     QDoubleSpinBox* densitySpin_;

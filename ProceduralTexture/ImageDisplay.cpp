@@ -731,3 +731,114 @@ void ImageDisplay::visualizeBinDistribution(const std::vector<EBPTns::Edge>& edg
     std::cout << "-----------------------------------------" << std::endl;
     std::cout << "Total: " << total << " ребер" << std::endl;
 }
+
+cv::Mat ImageDisplay::visualizeSuperpixelLabels(const cv::Mat& image, const cv::Mat& labels) {
+    cv::Mat visualization;
+
+    if (image.channels() == 1) {
+        cv::cvtColor(image, visualization, cv::COLOR_GRAY2BGR);
+    }
+    else {
+        visualization = image.clone();
+    }
+
+    if (labels.empty()) {
+        return visualization;
+    }
+
+    // Генерируем уникальные цвета для каждого суперпикселя
+    std::unordered_map<int, cv::Scalar> sp_colors;
+    cv::RNG rng(12345);
+
+    // Находим все уникальные метки суперпикселей
+    std::set<int> unique_labels;
+    for (int y = 0; y < labels.rows; ++y) {
+        for (int x = 0; x < labels.cols; ++x) {
+            unique_labels.insert(labels.at<int>(y, x));
+        }
+    }
+
+    // Создаем цветную карту для каждого суперпикселя
+    for (int label : unique_labels) {
+        // Генерируем яркий, насыщенный цвет
+        cv::Scalar color(
+            rng.uniform(100, 255),
+            rng.uniform(100, 255),
+            rng.uniform(100, 255)
+        );
+        sp_colors[label] = color;
+    }
+
+    // Закрашиваем каждый суперпиксель своим цветом с прозрачностью
+    cv::Mat colored_labels = cv::Mat::zeros(labels.size(), CV_8UC3);
+    for (int y = 0; y < labels.rows; ++y) {
+        for (int x = 0; x < labels.cols; ++x) {
+            int label = labels.at<int>(y, x);
+            colored_labels.at<cv::Vec3b>(y, x) = cv::Vec3b(
+                sp_colors[label][0],
+                sp_colors[label][1],
+                sp_colors[label][2]
+            );
+        }
+    }
+
+    // Накладываем цветные метки на исходное изображение с прозрачностью
+    cv::addWeighted(visualization, 0.3, colored_labels, 0.7, 0, visualization);
+
+    // Рисуем границы суперпикселей
+    cv::Mat boundaries = cv::Mat::zeros(labels.size(), CV_8UC1);
+    for (int y = 1; y < labels.rows - 1; ++y) {
+        for (int x = 1; x < labels.cols - 1; ++x) {
+            int current = labels.at<int>(y, x);
+            // Проверяем соседей
+            if (current != labels.at<int>(y - 1, x) ||
+                current != labels.at<int>(y + 1, x) ||
+                current != labels.at<int>(y, x - 1) ||
+                current != labels.at<int>(y, x + 1)) {
+                boundaries.at<uchar>(y, x) = 255;
+            }
+        }
+    }
+
+    // Рисуем границы белым цветом
+    //visualization.setTo(cv::Scalar(255, 255, 255), boundaries);
+
+    // Добавляем центры и номера суперпикселей
+    std::unordered_map<int, cv::Point> centers;
+    std::unordered_map<int, int> counts;
+
+    // Вычисляем центры суперпикселей
+    for (int y = 0; y < labels.rows; ++y) {
+        for (int x = 0; x < labels.cols; ++x) {
+            int label = labels.at<int>(y, x);
+            centers[label].x += x;
+            centers[label].y += y;
+            counts[label]++;
+        }
+    }
+
+    // Рисуем центры и номера
+    for (const auto& [label, center] : centers) {
+        if (counts[label] > 0) {
+            cv::Point actual_center(
+                center.x / counts[label],
+                center.y / counts[label]
+            );
+
+            // Рисуем центр
+            cv::circle(visualization, actual_center, 4, cv::Scalar(0, 0, 0), -1);
+            cv::circle(visualization, actual_center, 3, sp_colors[label], -1);
+
+            // Добавляем номер суперпикселя
+            std::string label_text = std::to_string(label);
+            cv::putText(visualization, label_text,
+                cv::Point(actual_center.x + 5, actual_center.y - 5),
+                cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 2);
+            cv::putText(visualization, label_text,
+                cv::Point(actual_center.x + 5, actual_center.y - 5),
+                cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 0, 0), 1);
+        }
+    }
+
+    return visualization;
+}

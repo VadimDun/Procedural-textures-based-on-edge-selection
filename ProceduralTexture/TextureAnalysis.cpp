@@ -345,6 +345,10 @@ namespace EBPTns {
         //cv::Mat sp_visualization = ImageDisplay::visualizeSuperpixels(input_image, superpixel_labels);
         //ImageDisplay::saveAndShow("superpixels_boundaries.png", "Superpixels", sp_visualization);
 
+        // Сохраняем визуализацию меток
+        cv::Mat labels_visualization = ImageDisplay::visualizeSuperpixelLabels(input_image, superpixel_labels);
+        ImageDisplay::saveAndShow("superpixel_labels.png", "Superpixel Labels", labels_visualization);
+
         // Groups
         std::vector<SourceGroupInfo> source_infos;
         for (const auto& edge : edges) {

@@ -24,7 +24,7 @@ namespace EBPTns {
             }
         };
 
-        TextureSynthesis(const cv::Size& size, bool enable_rotation);
+        TextureSynthesis(const cv::Size& size, bool enable_rotation, bool enable_scaling);
 
         std::vector<PlacedGroup> synthesizeHierarchicalPlacement(
             const cv::Mat& input_image,
@@ -41,12 +41,14 @@ namespace EBPTns {
 
 		cv::Size getOutputSize() const { return outputSize; }
 		bool isRotationEnabled() const { return enable_rotation; }
+		bool isScalingEnabled() const { return enable_scaling; }
         unsigned int getRandomSeed() const { return seed_; }
 
     private:
         std::mt19937 rng_;
 
         bool enable_rotation = true;
+        bool enable_scaling = true;
         const int MIN_SIZE_PATCH = 300;
         cv::Size outputSize;
         unsigned int seed_ = 42;

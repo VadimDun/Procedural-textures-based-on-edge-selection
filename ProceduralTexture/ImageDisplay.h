@@ -52,6 +52,8 @@ public:
     static void visualizeBinDistribution(const std::vector<EBPTns::Edge>& edges,
         const std::string& filename = "images/bin_distribution.png");
 
+    static cv::Mat visualizeSuperpixelLabels(const cv::Mat& image, const cv::Mat& labels);
+
 private:
     static void drawArrow(cv::Mat& img, const cv::Point& end, float angle, const cv::Scalar& color);
 };

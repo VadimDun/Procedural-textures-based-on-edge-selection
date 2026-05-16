@@ -115,7 +115,7 @@ void SynthesisWorker::doWork() {
         emit progress(10);
 
         auto textureSynthesis = controller_->getOrCreateTextureSynthesis(
-            outputSize_, enableRotation_, seed_);
+            outputSize_, enableRotation_, enableScaling_, seed_);
 
         textureSynthesis->setTargetFillPercentage(
             largeFillPercentage_,
@@ -361,16 +361,17 @@ void AppController::setOutputTexture(const cv::Mat& texture) {
 }
 
 std::shared_ptr<EBPTns::TextureSynthesis> AppController::getOrCreateTextureSynthesis(
-    const cv::Size& outputSize, bool enableRotation, unsigned int seed) {
+    const cv::Size& outputSize, bool enableRotation, bool enableScaling, unsigned int seed) {
 
     // ѕровер€ем, нужно ли создать новый синтезатор
     bool needsNew = !textureSynthesis_ ||
         textureSynthesis_->getOutputSize() != outputSize ||
         textureSynthesis_->isRotationEnabled() != enableRotation ||
+		textureSynthesis_->isScalingEnabled() != enableScaling ||
         textureSynthesis_->getRandomSeed() != seed;
 
     if (needsNew) {
-        textureSynthesis_ = std::make_shared<EBPTns::TextureSynthesis>(outputSize, enableRotation);
+        textureSynthesis_ = std::make_shared<EBPTns::TextureSynthesis>(outputSize, enableRotation, enableScaling);
         textureSynthesis_->setRandomSeed(seed);
         std::cout << "===========================created new textureSynthesis_" << std::endl;
     }

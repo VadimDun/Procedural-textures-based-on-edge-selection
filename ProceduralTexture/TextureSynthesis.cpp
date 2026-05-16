@@ -9,7 +9,7 @@
 
 namespace EBPTns {
 
-    TextureSynthesis::TextureSynthesis(const cv::Size& size, bool enable_rotation) {
+    TextureSynthesis::TextureSynthesis(const cv::Size& size, bool enable_rotation, bool enable_scaling) {
         outputSize = size;
         std::random_device rd;
         rng_ = std::mt19937(rd());
@@ -21,20 +21,26 @@ namespace EBPTns {
         // Параметры для крупного масштаба (структура)
         ScaleLevelParams large_params;
         large_params.base_scale = 1.0f;
-        large_params.scale_variation = 0.2f;
         large_params.percent_fill_target = 0.5f;
 
         // Параметры для среднего масштаба (основная текстура)
         ScaleLevelParams medium_params;
         medium_params.base_scale = 1.0f;
-        medium_params.scale_variation = 0.3f;
         medium_params.percent_fill_target = 0.85f;
 
         // Параметры для мелкого масштаба (детали)
         ScaleLevelParams small_params;
         small_params.base_scale = 1.0f;
-        small_params.scale_variation = 0.4f;
         small_params.percent_fill_target = 0.98f;
+
+        if (enable_scaling) {
+            large_params.scale_variation = 0.2f;
+            medium_params.scale_variation = 0.3f;
+            small_params.scale_variation = 0.4f;
+        }
+        else {
+            large_params.angle_variation = medium_params.angle_variation = small_params.angle_variation = 0.0f;
+        }
 
         if (enable_rotation) {
             large_params.angle_variation = medium_params.angle_variation = small_params.angle_variation = 0.25f;

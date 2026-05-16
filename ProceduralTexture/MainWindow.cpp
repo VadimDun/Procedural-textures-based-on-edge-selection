@@ -257,7 +257,17 @@ void MainWindow::createParametersPanel() {
         });
     synthesisLayout->addWidget(rotationCheckBox_, 2, 1);
 
-    synthesisLayout->addWidget(new QLabel("Angle Spread:"), 3, 0);
+    synthesisLayout->addWidget(new QLabel("Enable Scaling:"), 3, 0);
+    scalingCheckBox_ = new QCheckBox();
+    scalingCheckBox_->setChecked(true);
+    connect(scalingCheckBox_, &QCheckBox::toggled,
+        [this](bool checked) {
+            controller_->setEnableScaling(checked);
+            updateParameterVisibility();
+        });
+    synthesisLayout->addWidget(scalingCheckBox_, 3, 1);
+
+    synthesisLayout->addWidget(new QLabel("Angle Spread:"), 4, 0);
     angleSpreadSpin_ = new QDoubleSpinBox();
     angleSpreadSpin_->setRange(0.0, 0.5);
     angleSpreadSpin_->setSingleStep(0.05);
@@ -265,23 +275,23 @@ void MainWindow::createParametersPanel() {
     angleSpreadSpin_->setDecimals(2);
     connect(angleSpreadSpin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
         [this](double v) { controller_->setAngleSpread(static_cast<float>(v)); });
-    synthesisLayout->addWidget(angleSpreadSpin_, 3, 1);
+    synthesisLayout->addWidget(angleSpreadSpin_, 4, 1);
 
-    synthesisLayout->addWidget(new QLabel("Random Seed:"), 4, 0);
+    synthesisLayout->addWidget(new QLabel("Random Seed:"), 5, 0);
     randomSeedSpin_ = new QSpinBox();
     randomSeedSpin_->setRange(0, 999999);
     randomSeedSpin_->setValue(42);
     connect(randomSeedSpin_, QOverload<int>::of(&QSpinBox::valueChanged),
         [this](int v) { controller_->setRandomSeed(static_cast<unsigned int>(v)); });
-    synthesisLayout->addWidget(randomSeedSpin_, 4, 1);
+    synthesisLayout->addWidget(randomSeedSpin_, 5, 1);
 
     // Добавляем разделитель
     QFrame* line = new QFrame();
     line->setFrameShape(QFrame::HLine);
     line->setFrameShadow(QFrame::Sunken);
-    synthesisLayout->addWidget(line, 5, 0, 1, 2);
+    synthesisLayout->addWidget(line, 6, 0, 1, 2);
 
-    synthesisLayout->addWidget(new QLabel("Large Elements Fill %:"), 6, 0);
+    synthesisLayout->addWidget(new QLabel("Large Elements Fill %:"), 7, 0);
     largeFillSpin_ = new QSpinBox();
     largeFillSpin_->setRange(0, 100);
     largeFillSpin_->setValue(50);
@@ -289,9 +299,9 @@ void MainWindow::createParametersPanel() {
     largeFillSpin_->setToolTip("Target fill percentage for large elements (0-100%)");
     connect(largeFillSpin_, QOverload<int>::of(&QSpinBox::valueChanged),
         this, &MainWindow::onLargeFillChanged);
-    synthesisLayout->addWidget(largeFillSpin_, 6, 1);
+    synthesisLayout->addWidget(largeFillSpin_, 7, 1);
 
-    synthesisLayout->addWidget(new QLabel("Medium Elements Fill %:"), 7, 0);
+    synthesisLayout->addWidget(new QLabel("Medium Elements Fill %:"), 8, 0);
     mediumFillSpin_ = new QSpinBox();
     mediumFillSpin_->setRange(0, 100);
     mediumFillSpin_->setValue(85);
@@ -299,9 +309,9 @@ void MainWindow::createParametersPanel() {
     mediumFillSpin_->setToolTip("Target fill percentage for medium elements (0-100%)");
     connect(mediumFillSpin_, QOverload<int>::of(&QSpinBox::valueChanged),
         this, &MainWindow::onMediumFillChanged);
-    synthesisLayout->addWidget(mediumFillSpin_, 7, 1);
+    synthesisLayout->addWidget(mediumFillSpin_, 8, 1);
 
-    synthesisLayout->addWidget(new QLabel("Small Elements Fill %:"), 8, 0);
+    synthesisLayout->addWidget(new QLabel("Small Elements Fill %:"), 9, 0);
     smallFillSpin_ = new QSpinBox();
     smallFillSpin_->setRange(0, 100);
     smallFillSpin_->setValue(98);
@@ -309,7 +319,7 @@ void MainWindow::createParametersPanel() {
     smallFillSpin_->setToolTip("Target fill percentage for small elements (0-100%)");
     connect(smallFillSpin_, QOverload<int>::of(&QSpinBox::valueChanged),
         this, &MainWindow::onSmallFillChanged);
-    synthesisLayout->addWidget(smallFillSpin_, 8, 1);
+    synthesisLayout->addWidget(smallFillSpin_, 9, 1);
 
     updateParameterVisibility();
 }

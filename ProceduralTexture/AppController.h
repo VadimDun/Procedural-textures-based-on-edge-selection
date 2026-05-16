@@ -66,6 +66,7 @@ private:
     const EBPTns::AnalysisResult* analysisResult_;
     cv::Size outputSize_;
     bool enableRotation_;
+    bool enableScaling_;
     float angleSpread_;
     unsigned int seed_;
     float largeFillPercentage_;
@@ -96,6 +97,7 @@ public:
     // Параметры синтеза
     void setOutputSize(int width, int height) { outputWidth_ = width; outputHeight_ = height; }
     void setEnableRotation(bool enable) { enableRotation_ = enable; }
+    void setEnableScaling(bool enable) { enableScaling_ = enable; }
     void setAngleSpread(float spread) { angleSpread_ = spread; }
     void setRandomSeed(unsigned int seed) { randomSeed_ = seed; }
 
@@ -121,7 +123,7 @@ public:
     void setOutputTexture(const cv::Mat& texture);
 
     std::shared_ptr<EBPTns::TextureSynthesis> getOrCreateTextureSynthesis(
-        const cv::Size& outputSize, bool enableRotation, unsigned int seed);
+        const cv::Size& outputSize, bool enableRotation, bool enableScaling, unsigned int seed);
 
 signals:
     void analysisStarted();
@@ -159,6 +161,7 @@ private:
     int outputWidth_ = 1400;
     int outputHeight_ = 1000;
     bool enableRotation_ = true;
+    bool enableScaling_ = true;
     float angleSpread_ = 0.1f;
     unsigned int randomSeed_ = 42;
 
