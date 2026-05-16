@@ -26,21 +26,25 @@
 // ======================== AnalysisWorker Implementation ========================
 
 AnalysisWorker::AnalysisWorker(AppController* controller, const cv::Mat& image,
-    int minEdgeLength, int regionSize, double threshold)
+    int minEdgeLength, int regionSize, float ruler, double threshold)
     : QObject(nullptr)
     , controller_(controller)
     , image_(image)
     , minEdgeLength_(minEdgeLength)
     , regionSize_(regionSize)
+    , ruler_(ruler)
     , threshold_(threshold)
 {
 }
 
 void AnalysisWorker::doWork() {
     try {
-        EBPTns::TextureAnalysis analyzer;
-        analyzer.setMinEdgeLength(minEdgeLength_);
-        analyzer.setSuperpixelParams(regionSize_, 10.0f, threshold_);
+        auto textureAnalysis = controller_->getOrCreateTextureAnalysis(minEdgeLength_, regionSize_, ruler_, threshold_);
+
+        if (!textureAnalysis) {
+            emit finished(false, "Failed to create or initialize texture analysis");
+            return;
+        }
 
         emit progress(10);
 
@@ -51,7 +55,7 @@ void AnalysisWorker::doWork() {
 
         emit progress(30);
 
-        auto result = analyzer.analyzeTexture(image_, MODEL_PATH);
+        auto result = textureAnalysis->analyzeTexture(image_, MODEL_PATH);
 
         emit progress(70);
 
@@ -89,7 +93,7 @@ void AnalysisWorker::doWork() {
 
 SynthesisWorker::SynthesisWorker(AppController* controller, const cv::Mat& image,
     const EBPTns::AnalysisResult* analysisResult,
-    const cv::Size& outputSize, bool enableRotation,
+	const cv::Size& outputSize, bool enableRotation, bool enableScaling,
     float angleSpread, unsigned int seed,
     float largeFillPercentage, float mediumFillPercentage, float smallFillPercentage)
     : controller_(controller)
@@ -97,6 +101,7 @@ SynthesisWorker::SynthesisWorker(AppController* controller, const cv::Mat& image
     , analysisResult_(analysisResult)
     , outputSize_(outputSize)
     , enableRotation_(enableRotation)
+	, enableScaling_(enableScaling)
     , angleSpread_(angleSpread)
     , seed_(seed)
     , largeFillPercentage_(largeFillPercentage)
@@ -180,6 +185,7 @@ AppController::AppController(QObject* parent)
     : QObject(parent)
     , isCancelled_(false)
     , isAnalyzed_(false)
+    , isTextureAnalysisInitialized_(false)
 {
     resetState();
     emitLog("AppController initialized");
@@ -258,7 +264,7 @@ void AppController::analyze() {
     emitLog("Starting texture analysis...");
 
     AnalysisWorker* worker = new AnalysisWorker(this, originalImage_,
-        minEdgeLength_, superpixelRegionSize_, superpixelThreshold_);
+        minEdgeLength_, superpixelRegionSize_, superpixelRuler_, superpixelThreshold_);
 
     QThread* thread = new QThread();
     worker->moveToThread(thread);
@@ -305,6 +311,7 @@ void AppController::synthesize() {
         analysisResult_.get(),
         cv::Size(outputWidth_, outputHeight_),
         enableRotation_,
+        enableScaling_,
         angleSpread_,
         randomSeed_,
         largeFillPercentage_,
@@ -367,7 +374,7 @@ std::shared_ptr<EBPTns::TextureSynthesis> AppController::getOrCreateTextureSynth
     bool needsNew = !textureSynthesis_ ||
         textureSynthesis_->getOutputSize() != outputSize ||
         textureSynthesis_->isRotationEnabled() != enableRotation ||
-		textureSynthesis_->isScalingEnabled() != enableScaling ||
+        textureSynthesis_->isScalingEnabled() != enableScaling ||
         textureSynthesis_->getRandomSeed() != seed;
 
     if (needsNew) {
@@ -380,4 +387,44 @@ std::shared_ptr<EBPTns::TextureSynthesis> AppController::getOrCreateTextureSynth
     }
 
     return textureSynthesis_;
+}
+
+std::shared_ptr<EBPTns::TextureAnalysis> AppController::getOrCreateTextureAnalysis(
+    int minEdgeLength, int regionSize, float ruler, double threshold) {
+
+    bool needsNew = !textureAnalysis_;
+
+    if (!needsNew) {
+        // Проверяем, изменились ли параметры
+        needsNew = (minEdgeLength_ != textureAnalysis_->getMinEdgeLength()) ||
+            (superpixelRegionSize_ != textureAnalysis_->getSuperpixelRegionSize()) ||
+            (superpixelRuler_ != textureAnalysis_->getSuperpixelRuler()) ||
+            (superpixelThreshold_ != textureAnalysis_->getSuperpixelThreshold());
+    }
+    else {
+        textureAnalysis_ = std::make_shared<EBPTns::TextureAnalysis>();
+        textureAnalysis_->initializeStructuredDetector(MODEL_PATH);
+    }
+
+    if (needsNew) {
+        textureAnalysis_->setMinEdgeLength(minEdgeLength);
+        textureAnalysis_->setSuperpixelParams(regionSize, ruler, threshold);
+
+        // Обновляем сохраненные параметры
+        minEdgeLength_ = minEdgeLength;
+        superpixelRegionSize_ = regionSize;
+        superpixelRuler_ = ruler;
+        superpixelThreshold_ = threshold;
+
+        std::cout << "===========================created new textureAnalysis_ with params: "
+            << "minEdgeLength=" << minEdgeLength
+            << ", regionSize=" << regionSize
+            << ", ruler=" << ruler
+            << ", threshold=" << threshold << std::endl;
+    }
+    else {
+        std::cout << "===========================reusing existing textureAnalysis_" << std::endl;
+    }
+
+    return textureAnalysis_;
 }

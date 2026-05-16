@@ -24,7 +24,7 @@ class AnalysisWorker : public QObject {
     Q_OBJECT
 public:
     AnalysisWorker(AppController* controller, const cv::Mat& image,
-        int minEdgeLength, int regionSize, double threshold);
+        int minEdgeLength, int regionSize, float ruler, double threshold);
 
 public slots:
     void doWork();
@@ -39,6 +39,7 @@ private:
     cv::Mat image_;
     int minEdgeLength_;
     int regionSize_;
+    float ruler_;
     double threshold_;
 };
 
@@ -47,7 +48,7 @@ class SynthesisWorker : public QObject {
 public:
     SynthesisWorker(AppController* controller, const cv::Mat& image,
         const EBPTns::AnalysisResult* analysisResult,
-        const cv::Size& outputSize, bool enableRotation,
+		const cv::Size& outputSize, bool enableRotation, bool enableScaling,
         float angleSpread, unsigned int seed,
         float largeFillPercentage, float mediumFillPercentage, float smallFillPercentage);
 
@@ -92,6 +93,7 @@ public:
     // Параметры анализа
     void setMinEdgeLength(int value) { minEdgeLength_ = value; }
     void setSuperpixelRegionSize(int value) { superpixelRegionSize_ = value; }
+    void setSuperpixelRuler(float value) { superpixelRuler_ = value; }
     void setSuperpixelThreshold(double value) { superpixelThreshold_ = value; }
 
     // Параметры синтеза
@@ -125,6 +127,9 @@ public:
     std::shared_ptr<EBPTns::TextureSynthesis> getOrCreateTextureSynthesis(
         const cv::Size& outputSize, bool enableRotation, bool enableScaling, unsigned int seed);
 
+    std::shared_ptr<EBPTns::TextureAnalysis> getOrCreateTextureAnalysis(
+        int minEdgeLength, int regionSize, float ruler, double threshold);
+
 signals:
     void analysisStarted();
     void analysisProgress(int percent);
@@ -142,6 +147,7 @@ signals:
 private:
     void resetState();
     void emitLog(const QString& msg);
+    bool initializeTextureAnalysis();
 
     // Данные
     cv::Mat originalImage_;
@@ -152,10 +158,12 @@ private:
     std::unique_ptr<EBPTns::AnalysisResult> analysisResult_;
 
     std::shared_ptr<EBPTns::TextureSynthesis> textureSynthesis_;
+    std::shared_ptr<EBPTns::TextureAnalysis> textureAnalysis_;
 
     // Параметры
     int minEdgeLength_ = 15;
     int superpixelRegionSize_ = 120;
+    float superpixelRuler_ = 10.0f;
     double superpixelThreshold_ = 0.1;
 
     int outputWidth_ = 1400;
@@ -172,6 +180,7 @@ private:
     // Состояние
     bool isCancelled_ = false;
     bool isAnalyzed_ = false;
+    bool isTextureAnalysisInitialized_ = false;
 
     friend class AnalysisWorker;
     friend class SynthesisWorker;

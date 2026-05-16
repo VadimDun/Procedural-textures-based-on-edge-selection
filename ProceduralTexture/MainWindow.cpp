@@ -192,7 +192,7 @@ void MainWindow::createParametersPanel() {
     analysisLayout->addWidget(new QLabel("Min Edge Length:"), 0, 0);
     minEdgeLengthSpin_ = new QSpinBox();
     minEdgeLengthSpin_->setRange(5, 100);
-    minEdgeLengthSpin_->setValue(10);
+    minEdgeLengthSpin_->setValue(15);
     minEdgeLengthSpin_->setSuffix(" px");
     connect(minEdgeLengthSpin_, QOverload<int>::of(&QSpinBox::valueChanged),
         [this](int v) { controller_->setMinEdgeLength(v); });
@@ -221,6 +221,8 @@ void MainWindow::createParametersPanel() {
     rulerSpin_->setRange(5, 30);
     rulerSpin_->setValue(10);
     rulerSpin_->setSingleStep(1);
+    connect(rulerSpin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+        [this](double v) { controller_->setSuperpixelRuler(static_cast<float>(v)); });
     analysisLayout->addWidget(rulerSpin_, 3, 1);
 
     // === Параметры синтеза ===

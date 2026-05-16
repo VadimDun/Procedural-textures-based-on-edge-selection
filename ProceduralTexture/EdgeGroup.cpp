@@ -17,13 +17,11 @@ namespace EBPTns {
     void EdgeGroup::calculateStatistics() {
         if (edges_.empty()) {
             center_ = cv::Point2f(0, 0);
-            avg_angle_ = 0.0f;
             radial_spread_ = 0.0f;
             return;
         }
 
         calculateGroupCenter();
-        calculateAverageAngle();
         calculateRadialSpread();
     }
 
@@ -43,27 +41,6 @@ namespace EBPTns {
 
         center_.x = sum_x / static_cast<float>(edges_.size());
         center_.y = sum_y / static_cast<float>(edges_.size());
-    }
-
-    void EdgeGroup::calculateAverageAngle() {
-        if (edges_.empty()) {
-            avg_angle_ = 0.0f;
-            return;
-        }
-
-        float sum_cos = 0.0f, sum_sin = 0.0f;
-
-        for (const auto& edge : edges_) {
-            float angle = edge.getAngle();
-            sum_cos += std::cos(angle);
-            sum_sin += std::sin(angle);
-        }
-
-        avg_angle_ = std::atan2(sum_sin, sum_cos);
-
-        if (avg_angle_ < 0) {
-            avg_angle_ += CV_PI;
-        }
     }
 
     void EdgeGroup::calculateRadialSpread() {
@@ -142,10 +119,6 @@ namespace EBPTns {
             edge.applyTransform(rotation_matrix);
         }
 
-        avg_angle_ = std::fmod(avg_angle_ + angle_radians, CV_PI);
-        if (avg_angle_ < 0) {
-            avg_angle_ += CV_PI;
-        }
     }
 
     void EdgeGroup::scale(float factor) {

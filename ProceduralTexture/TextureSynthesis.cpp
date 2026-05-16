@@ -682,7 +682,7 @@ namespace EBPTns {
 
         float total_filled = cv::countNonZero(occupancy_map_) / (float)(occupancy_map_.total());
         std::cout << "\nFinal occupancy: " << (total_filled * 100) << "%" << std::endl;
-        std::cout << "Total time: " << total_duration.count() / 1000.0 << " sec" << std::endl;
+        std::cout << "Total synthesis time: " << total_duration.count() / 1000.0 << " sec" << std::endl;
 
         if (total_filled < 0.95f) {
             std::cout << "Warning: Final occupancy (" << (total_filled * 100)

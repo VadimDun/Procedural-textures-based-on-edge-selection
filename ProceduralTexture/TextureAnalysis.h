@@ -34,8 +34,15 @@ namespace EBPTns {
         void setMinEdgeLength(int min_length = 10);
         void setSuperpixelParams(int region_size = 30, float ruler = 10.0f, double sp_Thresholds = 0.25);
 
+        bool initializeStructuredDetector(const std::string& model_path);
+
+        int getMinEdgeLength() const { return min_edge_length_; }
+        int getSuperpixelRegionSize() const { return superpixel_region_size_; }
+        float getSuperpixelRuler() const { return superpixel_ruler_; }
+        double getSuperpixelThreshold() const { return superpixel_threshold; }
+
     private:
-        int min_edge_length_ = 10;  
+        int min_edge_length_ = 10;
 
         int superpixel_region_size_ = 30;
         float superpixel_ruler_ = 10.0f;
@@ -49,8 +56,6 @@ namespace EBPTns {
         // Structured Forests
         cv::Ptr<cv::ximgproc::StructuredEdgeDetection> structured_edge_detector_;
         bool is_structured_initialized_ = false;
-
-        bool initializeStructuredDetector(const std::string& model_path);
 
         std::vector<Edge> extractEdges(const cv::Mat& image, cv::Mat edge_probability_map);
 

@@ -5,6 +5,7 @@
 #include <iostream>
 #include <fstream>
 #include <numeric>
+#include <chrono>
 
 namespace EBPTns {
 
@@ -66,6 +67,7 @@ namespace EBPTns {
             if (contour.size() < 2) continue;
 
             auto simplified = simplifyContour(contour);
+            //auto simplified = contour;
 
             float length = 0;
             for (size_t i = 1; i < simplified.size(); ++i) {
@@ -116,7 +118,7 @@ namespace EBPTns {
         superpixel_region_size_ = region_size;
         superpixel_ruler_ = ruler;
         superpixel_threshold = sp_threshold;
-        std::cout << "Параметры суперпикселей: region_size=" << region_size
+        std::cout << "superpixels params: region_size=" << region_size
             << ", ruler=" << ruler << ", threshold=" << sp_threshold << std::endl;
     }
 
@@ -303,10 +305,13 @@ namespace EBPTns {
         const cv::Mat& input_image,
         const std::string& model_path) {
 
+        auto total_start = std::chrono::high_resolution_clock::now();
+
         std::cout << "Picture size: " << input_image.cols << "x" << input_image.rows << std::endl;
 
-        if (!initializeStructuredDetector(model_path)) {
-            std::cerr << "TextureAnalysis::analyzeTextureStructured: StructuredForests didn't created" << std::endl;
+        if (!is_structured_initialized_) {
+            std::cerr << "TextureAnalysis::analyzeTexture: StructuredEdgeDetection is not initialized. "
+                << "Call initializeStructuredDetector first or ensure model is loaded." << std::endl;
             return AnalysisResult();
         }
 
@@ -336,9 +341,6 @@ namespace EBPTns {
         }
         //cv::Mat edges_visualization = ImageDisplay::visualizeEdges(input_image, edges);
         //ImageDisplay::save("edges.png", edges_visualization);
-
-        ImageDisplay::visualizeAllChainCodes(edges, input_image, "images/chain_code_debug.png");
-        //ImageDisplay::visualizeAnglesOnly(edges, input_image, "images/angles_directions.png");
 
         // Вычисляем суперпиксели
         cv::Mat superpixel_labels = computeSuperpixels(input_image);
@@ -401,11 +403,12 @@ namespace EBPTns {
             //ImageDisplay::show(s1, group.mask);
         }
 
+        auto total_end = std::chrono::high_resolution_clock::now();
+        auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(total_end - total_start);
+        std::cout << "Total analysis time: " << total_duration.count() / 1000.0 << " sec" << std::endl << std::endl;
 
         cv::Mat groups_hull_visualization = ImageDisplay::visualizeGroups(input_image, source_infos);
         ImageDisplay::saveAndShowWithSize("groups.png", "Edge Groups", groups_hull_visualization, cv::Size(groups_hull_visualization.cols, groups_hull_visualization.rows));
-
-        //ImageDisplay::setPartFinalVisualization(groups_hull_visualization, ImageDisplay::groups);
 
         AnalysisResult result(source_infos);
 

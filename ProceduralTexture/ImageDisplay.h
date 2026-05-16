@@ -27,30 +27,11 @@ public:
 
     static void visualiseSPWithEdges(const cv::Mat& image, const cv::Mat& spVis, const cv::Mat& edgeVis);
 
-    static void visualizeChainCode(const EBPTns::Edge& edge, cv::Mat& image,
-        const cv::Scalar& color = cv::Scalar(0, 255, 0),
-        bool show_angle = true);
-
-    static void visualizeAllChainCodes(const std::vector<EBPTns::Edge>& edges,
-        const cv::Mat& image,
-        const std::string& filename = "images/chain_code_viz.png");
-
-    static void visualizeAnglesOnly(const std::vector<EBPTns::Edge>& edges,
-        const cv::Mat& background,
-        const std::string& filename = "images/angles_only.png");
-
     static cv::Mat drawPlacementMap(
         const std::vector<PlacedGroup>& placed_groups,
         const cv::Size& size);
 
     static void showOccupancyMap(const cv::Mat& occupancy_map, const std::string& title = "Occupancy Map");
-
-    static void visualizeEdgeBins(const cv::Mat& input_image,
-        const std::vector<EBPTns::Edge>& edges,
-        const std::string& filename = "images/edge_bins.png");
-
-    static void visualizeBinDistribution(const std::vector<EBPTns::Edge>& edges,
-        const std::string& filename = "images/bin_distribution.png");
 
     static cv::Mat visualizeSuperpixelLabels(const cv::Mat& image, const cv::Mat& labels);
 
