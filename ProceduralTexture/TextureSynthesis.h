@@ -4,6 +4,7 @@
 #include "Edge.h"
 #include "EdgeGroup.h"
 #include "PlacedGroup.h"
+#include "TextureAnalysis.h"
 #include <vector>
 #include <random>
 
@@ -28,7 +29,7 @@ namespace EBPTns {
 
         std::vector<PlacedGroup> synthesizeHierarchicalPlacement(
             const cv::Mat& input_image,
-            const std::vector<SourceGroupInfo>& source_groups);
+            const std::vector<Patch>& analysisResult);
 
 
 		void setOutputSize(const cv::Size& size) { outputSize = size; }
@@ -83,7 +84,7 @@ namespace EBPTns {
         float generateRandomScale(float base_scale, float variation);
 
         PlacedGroup transformGroup(
-            const SourceGroupInfo& source_info,
+            const Patch& patch,
             const cv::Mat& input_image,
             int source_idx,
             const cv::Point2f& position,

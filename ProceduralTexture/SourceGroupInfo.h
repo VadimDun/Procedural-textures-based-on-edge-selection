@@ -52,4 +52,25 @@ namespace EBPTns {
         //}
     };
 
+    struct Patch {
+        std::vector<cv::Point> hull;
+        float radial_spread_;
+        uint8_t index;
+        cv::Rect bbox;
+
+        ScaleLevel scale_level;
+
+        Patch() {}
+        Patch& operator=(const Patch& other) {
+            if (this != &other) {
+                hull = other.hull;
+                radial_spread_ = other.radial_spread_;
+                index = other.index;
+                bbox = other.bbox;
+                scale_level = other.scale_level;
+            }
+            return *this;
+        }
+    };
+
 }

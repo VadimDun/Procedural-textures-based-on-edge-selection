@@ -13,14 +13,15 @@ namespace EBPTns {
 
     struct AnalysisResult {
         std::vector<SourceGroupInfo> source_groups;
+        std::vector<Patch> patches;
 
         AnalysisResult() = default;
 
-        AnalysisResult(const std::vector<SourceGroupInfo>& sgi)
-            : source_groups(sgi){
+        AnalysisResult(const std::vector<SourceGroupInfo>& sgi, const std::vector<Patch>& patches)
+            :source_groups(sgi), patches(patches){
         }
 
-        bool isValid() const { return !source_groups.empty(); }
+        bool isValid() const { return !patches.empty() && !source_groups.empty(); }
     };
 
     class TextureAnalysis {

@@ -332,13 +332,13 @@ namespace EBPTns {
     }
 
     PlacedGroup TextureSynthesis::transformGroup(
-        const SourceGroupInfo& source_info,
+        const Patch& patch,
         const cv::Mat& input_image,
         int source_idx,
         const cv::Point2f& position,
         float angle, float scale) const {
 
-        cv::Rect source_bbox = source_info.group.getBoundingBox();
+        cv::Rect source_bbox = patch.bbox;
         //cv::Rect source_bbox = cv::boundingRect(source_info.hull);
         cv::Mat original_patch = input_image(source_bbox).clone();
         
@@ -380,13 +380,13 @@ namespace EBPTns {
 
         std::vector<cv::Point> transformed_hull_local;
 
-        if (!source_info.hull.empty())
+        if (!patch.hull.empty())
         {
             transformed_hull_local.reserve(
-                source_info.hull.size()
+                patch.hull.size()
             );
 
-            for (const auto& point : source_info.hull)
+            for (const auto& point : patch.hull)
             {
                 cv::Point2f p(
                     point.x - source_bbox.x,
@@ -503,7 +503,7 @@ namespace EBPTns {
             source_idx,
             scale,
             angle,
-            source_info.scale_level
+            patch.scale_level
         );
 
         return placed_group;
@@ -511,7 +511,7 @@ namespace EBPTns {
 
     std::vector<PlacedGroup> TextureSynthesis::synthesizeHierarchicalPlacement(
         const cv::Mat& input_image,
-        const std::vector<SourceGroupInfo>& source_groups) {
+        const std::vector<Patch>& patches) {
 
         std::vector<PlacedGroup> all_placed_groups;
         auto total_start = std::chrono::high_resolution_clock::now();
@@ -519,9 +519,9 @@ namespace EBPTns {
         occupancy_map_ = cv::Mat::zeros(outputSize.height, outputSize.width, CV_8UC1);
 
         // Группируем исходные группы по уровню
-        std::map<ScaleLevel, std::vector<const SourceGroupInfo*>> groups_by_level;
-        for (const auto& group_info : source_groups) {
-            groups_by_level[group_info.scale_level].push_back(&group_info);
+        std::map<ScaleLevel, std::vector<const Patch*>> groups_by_level;
+        for (const auto& patch : patches) {
+            groups_by_level[patch.scale_level].push_back(&patch);
         }
 
         // Порядок уровней для размещения
@@ -566,7 +566,7 @@ namespace EBPTns {
             while (current_fill < target_fill && total_attempts < MAX_TOTAL_ATTEMPTS) {
                 total_attempts++;
 
-                const SourceGroupInfo* source_info;
+                const Patch* patch;
 
                 cv::Point2f position;
                 float scale;
@@ -575,7 +575,7 @@ namespace EBPTns {
                 {
                     float radius;
                     position = findLargestEmptyLocation(radius);
-                    int min_group_size = level_groups[level_groups.size() - 1]->group.getRadialSpread();
+                    //float min_group_size = level_groups[level_groups.size() - 1]->radial_spread_;
                     //if (radius < min_group_size * 0.3)
                     //    break;
 
@@ -586,8 +586,7 @@ namespace EBPTns {
 
                     for (int i = 0; i < level_groups.size(); i++)
                     {
-                        float group_size =
-                            level_groups[i]->group.getRadialSpread();
+                        float group_size = level_groups[i]->radial_spread_;
 
                         float diff = std::abs(group_size - desired_size);
 
@@ -598,14 +597,14 @@ namespace EBPTns {
                         }
                     }
 
-                    if (1.3 * level_groups[0]->group.getRadialSpread() < radius) {
+                    if (1.3 * level_groups[0]->radial_spread_ < radius) {
                         best_idx = group_dist(rng_);
                     }
 
-                    source_info = level_groups[best_idx];
+                    patch = level_groups[best_idx];
 
 
-                    float base_patch_size = static_cast<float>(source_info->group.getRadialSpread());
+                    float base_patch_size = static_cast<float>(patch->radial_spread_);
 
                     scale = desired_size / base_patch_size;
                     scale = std::max(0.3f, std::min(scale, 1.2f));
@@ -613,7 +612,7 @@ namespace EBPTns {
                 else
                 {
                     int source_idx = group_dist(rng_);
-                    source_info = level_groups[source_idx];
+                    patch = level_groups[source_idx];
 
                     position = generatePositionByLevel(level);
                     scale = generateRandomScale(params.base_scale, params.scale_variation);
@@ -623,7 +622,7 @@ namespace EBPTns {
 
                 // Трансформируем группу
                 PlacedGroup placed_group = transformGroup(
-                    *source_info, input_image, source_info->group.getIndex(), position, angle, scale);
+                    *patch, input_image, patch->index, position, angle, scale);
                 if (placed_group.source_index == -1) continue;
 
                 placed_group.scale_level = level;

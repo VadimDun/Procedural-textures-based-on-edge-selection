@@ -56,7 +56,6 @@ namespace EBPTns {
 
         // Бинаризуем карту вероятностей (порог можно подобрать)
         cv::Mat binary_edges;
-        //double threshold = 0.25; // todo сделать изменение порога в ручном формате в процессе работы программы, либо автоматический подбор
         cv::threshold(edge_probability_map, binary_edges, superpixel_threshold, 255, cv::THRESH_BINARY);
         binary_edges.convertTo(binary_edges, CV_8UC1);
 
@@ -395,22 +394,30 @@ namespace EBPTns {
         cv::Size size = input_image.size();
 
         int cnt = 1;
+        std::vector<Patch> patches;
         for (auto& group : source_infos) {
             group.hull = computeHull(group.group);
             group.group.setIndex(cnt++);
-            std::string s = "Patch before" + std::to_string(cnt);
-            std::string s1 = "Mask before" + std::to_string(cnt);
+            //std::string s = "Patch before" + std::to_string(cnt);
+            //std::string s1 = "Mask before" + std::to_string(cnt);
             //ImageDisplay::show(s1, group.mask);
+            Patch patch;
+            patch.hull = computeHull(group.group);
+            patch.radial_spread_ = group.group.getRadialSpread();
+            patch.index = cnt++;
+            patch.scale_level = group.scale_level;
+            patch.bbox = group.group.getBoundingBox();
+            patches.push_back(patch);
         }
 
         auto total_end = std::chrono::high_resolution_clock::now();
         auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(total_end - total_start);
         std::cout << "Total analysis time: " << total_duration.count() / 1000.0 << " sec" << std::endl << std::endl;
 
-        cv::Mat groups_hull_visualization = ImageDisplay::visualizeGroups(input_image, source_infos);
-        ImageDisplay::saveAndShowWithSize("groups.png", "Edge Groups", groups_hull_visualization, cv::Size(groups_hull_visualization.cols, groups_hull_visualization.rows));
+        //cv::Mat groups_hull_visualization = ImageDisplay::visualizeGroups(input_image, source_infos);
+        //ImageDisplay::saveAndShowWithSize("groups.png", "Edge Groups", groups_hull_visualization, cv::Size(groups_hull_visualization.cols, groups_hull_visualization.rows));
 
-        AnalysisResult result(source_infos);
+        AnalysisResult result(source_infos, patches);
 
         return result;
     }

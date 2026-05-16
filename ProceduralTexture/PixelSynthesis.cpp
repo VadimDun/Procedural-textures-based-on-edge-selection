@@ -26,7 +26,6 @@ namespace EBPTns {
 
     cv::Mat PixelSynthesis::fillPixels(
         const cv::Mat& input_image,
-        const std::vector<SourceGroupInfo>& source_infos,
         const std::vector<PlacedGroup>& placed_groups,
         const cv::Size& size) {
 

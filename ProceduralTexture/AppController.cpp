@@ -135,8 +135,9 @@ void SynthesisWorker::doWork() {
             return;
         }
 
-        auto placedGroups = textureSynthesis->synthesizeHierarchicalPlacement(
-            image_, analysisResult_->source_groups);
+        std::vector<Patch> patches = analysisResult_->patches;
+
+        auto placedGroups = textureSynthesis->synthesizeHierarchicalPlacement(image_, patches);
 
         emit progress(60);
 
@@ -160,8 +161,7 @@ void SynthesisWorker::doWork() {
 
         // Заполнение пикселей
         EBPTns::PixelSynthesis pixelSynthesis;
-        cv::Mat outputTexture = pixelSynthesis.fillPixels(
-            image_, analysisResult_->source_groups, placedGroups, outputSize_);
+        cv::Mat outputTexture = pixelSynthesis.fillPixels(image_, placedGroups, outputSize_);
         controller_->setOutputTexture(outputTexture);
 
         emit progress(90);
@@ -342,9 +342,7 @@ void AppController::cancel() {
 }
 
 void AppController::resetState() {
-    // Не сбрасываем originalImage_, только результаты
     isAnalyzed_ = false;
-    // Не удаляем analysisResult_ здесь, чтобы не повредить возможность регенерации
 }
 
 void AppController::emitLog(const QString& msg) {
