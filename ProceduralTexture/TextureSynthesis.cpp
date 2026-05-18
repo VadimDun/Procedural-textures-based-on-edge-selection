@@ -163,18 +163,16 @@ namespace EBPTns {
         float angle, float scale) const {
 
         cv::Rect source_bbox = patch.bbox;
-        //cv::Rect source_bbox = cv::boundingRect(source_info.hull);
+
         cv::Mat original_patch = input_image(source_bbox).clone();
-        
+
         cv::Point2f local_center(
-            original_patch.cols / 2.0,
-            original_patch.rows / 2.0
+            original_patch.cols / 2.0f,
+            original_patch.rows / 2.0f
         );
 
-        //Создаем матрицу поворота
         cv::Mat rot_mat = cv::getRotationMatrix2D(local_center, -angle * 180.0 / CV_PI, scale);
 
-        // Новый bbox после rotation
         cv::Size scaled_size(
             std::round(original_patch.cols * scale),
             std::round(original_patch.rows * scale)
@@ -182,33 +180,26 @@ namespace EBPTns {
 
         cv::Rect bbox_rotated =
             cv::RotatedRect(
-                local_center,
-                scaled_size,
-                -angle * 180.0 / CV_PI
-            ).boundingRect();
+            local_center,
+            scaled_size,
+            -angle * 180.0 / CV_PI
+        ).boundingRect();
 
         rot_mat.at<double>(0, 2) += (bbox_rotated.width / 2.0 - local_center.x);
         rot_mat.at<double>(1, 2) += (bbox_rotated.height / 2.0 - local_center.y);
 
-        //rot_mat.at<double>(0, 2) -= bbox_rotated.x;
-        //rot_mat.at<double>(1, 2) -= bbox_rotated.y;
-
         // Поворачиваем PATCH
-
         cv::Mat transformed_patch;
         cv::warpAffine(original_patch, transformed_patch, rot_mat,
             bbox_rotated.size(),
             cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0));
 
         // Трансформируем hull
-
         std::vector<cv::Point> transformed_hull_local;
 
         if (!patch.hull.empty())
         {
-            transformed_hull_local.reserve(
-                patch.hull.size()
-            );
+            transformed_hull_local.reserve(patch.hull.size());
 
             for (const auto& point : patch.hull)
             {
@@ -240,14 +231,11 @@ namespace EBPTns {
         }
 
         // Строим mask из hull
-
         cv::Mat transformed_mask = cv::Mat::zeros(bbox_rotated.size(), CV_8UC1);
 
         if (transformed_hull_local.size() >= 3)
         {
-            std::vector<std::vector<cv::Point>> poly{
-                transformed_hull_local
-            };
+            std::vector<std::vector<cv::Point>> poly{ transformed_hull_local };
 
             cv::fillPoly(transformed_mask, poly, cv::Scalar(255));
         }
@@ -266,7 +254,7 @@ namespace EBPTns {
                 transformed_patch.rows
             );
 
-            tight_bbox = tight_bbox & image_rect;
+            tight_bbox &= image_rect;
 
             //std::cout << "\nTIGHT bbox = "
             //    << tight_bbox.width << "x"
@@ -284,42 +272,71 @@ namespace EBPTns {
                 p.x -= tight_bbox.x;
                 p.y -= tight_bbox.y;
             }
-
-            bbox_rotated = tight_bbox;
         }
 
         if (cv::countNonZero(transformed_mask) < MIN_SIZE_PATCH)
             return PlacedGroup();
 
-        // Позиция на output
 
-        cv::Point2f new_center(
-            position.x,
-            position.y
+        // Обрезаем по границе
+        int patch_left = static_cast<int>(position.x - transformed_patch.cols / 2.0f);
+        int patch_top = static_cast<int>(position.y - transformed_patch.rows / 2.0f);
+        int patch_right = patch_left + transformed_patch.cols;
+        int patch_bottom = patch_top + transformed_patch.rows;
+
+        int clipped_left = std::max(0, patch_left);
+        int clipped_top = std::max(0, patch_top);
+        int clipped_right = std::min(outputSize.width, patch_right);
+        int clipped_bottom = std::min(outputSize.height, patch_bottom);
+
+        if (clipped_left >= clipped_right || clipped_top >= clipped_bottom)
+        {
+            return PlacedGroup();
+        }
+
+        int roi_x = clipped_left - patch_left;
+        int roi_y = clipped_top - patch_top;
+
+        int clipped_width = clipped_right - clipped_left;
+        int clipped_height = clipped_bottom - clipped_top;
+
+        cv::Rect clip_roi(
+            roi_x,
+            roi_y,
+            clipped_width,
+            clipped_height
         );
 
-        cv::Point2f patch_offset(
-            new_center.x - (bbox_rotated.width / 2.0),
-            new_center.y - (bbox_rotated.height / 2.0)
-        );
+        transformed_patch = transformed_patch(clip_roi).clone();
+        transformed_mask = transformed_mask(clip_roi).clone();
+
+        for (auto& p : transformed_hull_local)
+        {
+            p.x -= roi_x;
+            p.y -= roi_y;
+        }
 
         // Глобальный hull
 
         std::vector<cv::Point> transformed_hull_global;
 
-        transformed_hull_global.reserve(
-            transformed_hull_local.size()
-        );
+        transformed_hull_global.reserve(transformed_hull_local.size());
 
         for (const auto& p : transformed_hull_local)
         {
-            transformed_hull_global.push_back(
-                cv::Point(
-                    p.x + patch_offset.x,
-                    p.y + patch_offset.y
-                )
-            );
+            int gx = p.x + clipped_left;
+            int gy = p.y + clipped_top;
+
+            transformed_hull_global.emplace_back(gx, gy);
         }
+
+        cv::Point2f final_center(
+            clipped_left + transformed_patch.cols / 2.0f,
+            clipped_top + transformed_patch.rows / 2.0f
+        );
+
+        if (cv::countNonZero(transformed_mask) < MIN_SIZE_PATCH)
+            return PlacedGroup();
 
         ImageDisplay::save("patch.png", original_patch);
         ImageDisplay::save("tr_patch_a.png", transformed_patch);
@@ -329,7 +346,7 @@ namespace EBPTns {
             transformed_patch,
             transformed_mask,
             transformed_hull_global,
-            new_center,
+            final_center,
             source_idx,
             angle,
             patch.scale_level
