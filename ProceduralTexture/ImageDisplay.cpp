@@ -262,21 +262,6 @@ cv::Mat ImageDisplay::drawPlacementMap(
                 color, 1);
         }
 
-        // Рисуем направление
-        float angle = placed.rotation_angle;
-        int line_length = 40;  // Увеличим для наглядности
-        cv::Point direction(
-            center.x + static_cast<int>(line_length * std::cos(angle)),
-            center.y + static_cast<int>(line_length * std::sin(angle))
-        );
-        cv::line(placement_map, center, direction, color, 3);
-
-        // Рисуем стрелку
-        drawArrow(placement_map, direction, angle, color);
-
-        // Рисуем маленькую окружность в направлении для наглядности
-        cv::circle(placement_map, direction, 4, color, -1);
-
         // Номер группы
         std::string label = std::to_string(i + 1);
         cv::putText(placement_map, label,
@@ -300,7 +285,8 @@ void ImageDisplay::showOccupancyMap(const cv::Mat& occupancy_map, const std::str
 
     cv::Mat display;
     cv::applyColorMap(occupancy_map, display, cv::COLORMAP_JET);
-    show(title, display);
+    std::string path = title + ".png";
+    saveAndShow(path, title, display);
     cv::waitKey(1);
 }
 

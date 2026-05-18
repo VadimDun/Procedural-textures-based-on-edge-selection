@@ -84,89 +84,6 @@ namespace EBPTns {
 
     ////////////////////////////////
 
-    bool TextureSynthesis::checkHullIntersection(const std::vector<cv::Point>& hull1,
-        const std::vector<cv::Point>& hull2) const {
-        if (hull1.empty() || hull2.empty() || hull1.size() < 3 || hull2.size() < 3) {
-            return false;
-        }
-
-        for (size_t i = 0; i < hull1.size(); ++i) {
-            cv::Point p1 = hull1[i];
-            cv::Point p2 = hull1[(i + 1) % hull1.size()];
-
-            for (size_t j = 0; j < hull2.size(); ++j) {
-                cv::Point q1 = hull2[j];
-                cv::Point q2 = hull2[(j + 1) % hull2.size()];
-
-                if (doSegmentsIntersect(p1, p2, q1, q2)) {
-                    return true;
-                }
-            }
-        }
-
-        // Проверка на нахождение hull внутри другого
-        if (isPointInPolygon(hull1[0], hull2) || isPointInPolygon(hull2[0], hull1)) {
-            return true;
-        }
-
-        return false;
-    }
-
-    // Вспомогательная функция для проверки пересечения двух отрезков
-    bool TextureSynthesis::doSegmentsIntersect(const cv::Point& p1, const cv::Point& p2,
-        const cv::Point& q1, const cv::Point& q2) const {
-        auto orientation = [](const cv::Point& a, const cv::Point& b, const cv::Point& c) -> int {
-            int val = (b.y - a.y) * (c.x - b.x) - (b.x - a.x) * (c.y - b.y);
-            if (val == 0) return 0;  // Коллинеарны
-            return (val > 0) ? 1 : 2; // 1 - по часовой, 2 - против часовой
-            };
-
-        int o1 = orientation(p1, p2, q1);
-        int o2 = orientation(p1, p2, q2);
-        int o3 = orientation(q1, q2, p1);
-        int o4 = orientation(q1, q2, p2);
-
-        // Общий случай
-        if (o1 != o2 && o3 != o4) return true;
-
-        // Если коллинеарны
-        if (o1 == 0 && onSegment(p1, q1, p2)) return true;
-        if (o2 == 0 && onSegment(p1, q2, p2)) return true;
-        if (o3 == 0 && onSegment(q1, p1, q2)) return true;
-        if (o4 == 0 && onSegment(q1, p2, q2)) return true;
-
-        return false;
-    }
-
-    // Вспомогательная функция для проверки, лежит ли точка на отрезке
-    bool TextureSynthesis::onSegment(const cv::Point& p, const cv::Point& q, const cv::Point& r) const {
-        if (q.x <= std::max(p.x, r.x) && q.x >= std::min(p.x, r.x) &&
-            q.y <= std::max(p.y, r.y) && q.y >= std::min(p.y, r.y)) {
-            return true;
-        }
-        return false;
-    }
-
-    // Вспомогательная функция для проверки, находится ли точка внутри полигона
-    bool TextureSynthesis::isPointInPolygon(const cv::Point& point, const std::vector<cv::Point>& polygon) const {
-        if (polygon.size() < 3) return false;
-
-        bool inside = false;
-        for (size_t i = 0, j = polygon.size() - 1; i < polygon.size(); j = i++) {
-            const cv::Point& p1 = polygon[i];
-            const cv::Point& p2 = polygon[j];
-
-            if (((p1.y > point.y) != (p2.y > point.y)) &&
-                (point.x < (p2.x - p1.x) * (point.y - p1.y) / (p2.y - p1.y) + p1.x)) {
-                inside = !inside;
-            }
-        }
-
-        return inside;
-    }
-
-    ////////////////////////////////////
-
     void TextureSynthesis::updateOccupancyMap(const PlacedGroup& group) {
         if (occupancy_map_.empty()) return;
 
@@ -185,7 +102,7 @@ namespace EBPTns {
         else {
             //cv::Rect bbox = group.group.getBoundingBox();
             //cv::rectangle(occupancy_map_, bbox, cv::Scalar(weight * 255), cv::FILLED);
-            std::cerr << "TextureSynthesis::updateOccupancyMap: no hull!";
+            std::cerr << "TextureSynthesis::updateOccupancyMap: no hull!\n";
         }
     }
 
@@ -205,38 +122,12 @@ namespace EBPTns {
         return 1.0f;  // За пределами изображения считаем заполненным
     }
 
-    cv::Point2f TextureSynthesis::generatePositionByLevel(ScaleLevel level) {
+    cv::Point2f TextureSynthesis::generatePositionForLarge() {
         if (outputSize.width <= 0 || outputSize.height <= 0) {
             return cv::Point2f(0, 0);
         }
 
-        float margin;
-        switch (level) {
-        case ScaleLevel::LARGE:  margin = 100.0f; break;
-        case ScaleLevel::MEDIUM: margin = 50.0f; break;
-        default: margin = 20.0f; break;
-        }
-
-        // Для всех уровней, кроме LARGE, ищем пустоты
-        if (level != ScaleLevel::LARGE && !occupancy_map_.empty()) {
-            std::vector<cv::Point> low_occupancy_points;
-
-            for (int y = margin; y < outputSize.height - margin; y += margin) {
-                for (int x = margin; x < outputSize.width - margin; x += margin) {
-                    float occupancy = getOccupancyAtPoint(cv::Point2f(x, y));
-                    float threshold = 0.5f;
-                    if (occupancy < threshold) { // нет другого полигона
-                        low_occupancy_points.push_back(cv::Point(x, y));
-                    }
-                }
-            }
-
-            if (!low_occupancy_points.empty()) {
-                std::uniform_int_distribution<int> dist(0, low_occupancy_points.size() - 1);
-                int idx = dist(rng_);
-                return cv::Point2f(low_occupancy_points[idx].x, low_occupancy_points[idx].y);
-            }
-        }
+        float margin = 100.0f;
 
         std::uniform_real_distribution<float> dist_x(margin, outputSize.width - margin);
         std::uniform_real_distribution<float> dist_y(margin, outputSize.height - margin);
@@ -264,77 +155,10 @@ namespace EBPTns {
         return maxLoc;
     }
 
-    bool TextureSynthesis::checkOverlapByLevel(
-        const PlacedGroup& new_group,
-        const std::vector<PlacedGroup>& existing_groups,
-        ScaleLevel current_level) const {
-
-        if (existing_groups.empty()) return false;
-
-        float new_group_area = (float)cv::contourArea(new_group.hull);
-        float total_overlap_area = 0.0f;
-
-        for (const auto& existing : existing_groups) {
-            ScaleLevel existing_level = existing.scale_level;
-
-            if (!new_group.hull.empty() && !existing.hull.empty()) {
-                if (checkHullIntersection(new_group.hull, existing.hull)) {
-                    float intersection_area = computeHullIntersectionArea(new_group.hull, existing.hull);
-                    total_overlap_area += intersection_area;
-                    float overlap_ratio = intersection_area / new_group_area;
-                    float overlap_ratio_existing = intersection_area / (float)cv::contourArea(existing.hull);
-                    // ГРУППЫ ОДНОГО УРОВНЯ - строгий запрет
-                    if (current_level == existing_level) {
-                        float th = 0.2f;
-                        if (current_level == ScaleLevel::SMALL) th = 0.1f;
-                        if (overlap_ratio > th
-                            //|| overlap_ratio_existing > th
-                            ) {
-                            return true;
-                        }
-                    }
-                    else if (current_level != existing_level) {
-                        // Разные уровни (LARGE/MEDIUM с SMALL)
-                        if (overlap_ratio > 0.25f 
-                            || overlap_ratio_existing > 0.25f
-                            ) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-
-        // Проверка суммарного перекрытия
-        float total_overlap_ratio = total_overlap_area / new_group_area;
-
-        float total_th = 0.6f;
-        if (current_level == ScaleLevel::SMALL) total_th = 0.4f;
-        if (total_overlap_ratio > total_th) {
-            return true;
-        }
-
-        return false;
-    }
-
-    // Вспомогательная функция для вычисления площади пересечения hull
-    float TextureSynthesis::computeHullIntersectionArea(
-        const std::vector<cv::Point>& hull1,
-        const std::vector<cv::Point>& hull2) const {
-
-        // Переменная для хранения полигона пересечения
-        std::vector<cv::Point> intersectionPolygon;
-
-        // Вызов функции (handleNested = true для обработки случая вложенности)
-        float area = cv::intersectConvexConvex(hull1, hull2, intersectionPolygon, true);
-
-        return (area > 0) ? area : 0.0f;
-    }
-
     PlacedGroup TextureSynthesis::transformGroup(
         const Patch& patch,
         const cv::Mat& input_image,
-        int source_idx,
+        uint8_t source_idx,
         const cv::Point2f& position,
         float angle, float scale) const {
 
@@ -432,8 +256,7 @@ namespace EBPTns {
 
         if (transformed_hull_local.size() >= 3)
         {
-            cv::Rect tight_bbox =
-                cv::boundingRect(transformed_hull_local);
+            cv::Rect tight_bbox = cv::boundingRect(transformed_hull_local);
 
             // Ограничиваем bbox границами hull
             cv::Rect image_rect(
@@ -448,6 +271,9 @@ namespace EBPTns {
             //std::cout << "\nTIGHT bbox = "
             //    << tight_bbox.width << "x"
             //    << tight_bbox.height << std::endl << std::endl;
+
+            ImageDisplay::save("tr_patch_b.png", transformed_patch);
+            ImageDisplay::save("tr_mask_b.png", transformed_mask);
 
             transformed_patch = transformed_patch(tight_bbox).clone();
             transformed_mask = transformed_mask(tight_bbox).clone();
@@ -495,13 +321,16 @@ namespace EBPTns {
             );
         }
 
+        ImageDisplay::save("patch.png", original_patch);
+        ImageDisplay::save("tr_patch_a.png", transformed_patch);
+        ImageDisplay::save("tr_mask_a.png", transformed_mask);
+
         PlacedGroup placed_group(
             transformed_patch,
             transformed_mask,
             transformed_hull_global,
             new_center,
             source_idx,
-            scale,
             angle,
             patch.scale_level
         );
@@ -555,7 +384,7 @@ namespace EBPTns {
                 << " groups (target fill: " << (target_fill * 100) << "%)" << std::endl;
 
             // Распределение для выбора исходных групп
-            std::uniform_int_distribution<int> group_dist(0, level_groups.size() - 1);
+            std::uniform_int_distribution<short> group_dist(0, level_groups.size() - 1);
 
             int placed_count = 0;
             int overlap_count = 0;
@@ -581,7 +410,7 @@ namespace EBPTns {
 
                     float desired_size = radius * 2.0f;
 
-                    int best_idx = 0;
+                    uint8_t best_idx = 0;
                     float best_diff = 1e9f;
 
                     for (int i = 0; i < level_groups.size(); i++)
@@ -603,7 +432,6 @@ namespace EBPTns {
 
                     patch = level_groups[best_idx];
 
-
                     float base_patch_size = static_cast<float>(patch->radial_spread_);
 
                     scale = desired_size / base_patch_size;
@@ -611,10 +439,10 @@ namespace EBPTns {
                 }
                 else
                 {
-                    int source_idx = group_dist(rng_);
+                    uint8_t source_idx = group_dist(rng_);
                     patch = level_groups[source_idx];
 
-                    position = generatePositionByLevel(level);
+                    position = generatePositionForLarge();
                     scale = generateRandomScale(params.base_scale, params.scale_variation);
                 }
 
@@ -627,29 +455,9 @@ namespace EBPTns {
 
                 placed_group.scale_level = level;
 
-                // Проверяем перекрытие с уже размещенными группами
-                bool has_overlap = false;
-                if (!all_placed_groups.empty()) {
-                    if (checkOverlapByLevel(placed_group, all_placed_groups, level)) {
-                        overlap_count++;
-                        //has_overlap = true;
-                    }
-                }
-
-                if (has_overlap) {
-                    // Если слишком много попыток подряд безуспешны, возможно, достигнут предел заполнения
-                    if (overlap_count > max_attempts_per_group) {
-                        std::cout << "  Too many consecutive overlaps (" << overlap_count
-                            << "), moving to next level" << std::endl;
-                        break;
-                    }
-                    continue;
-                }
-
-                // Сброс при успешном размещении
-                overlap_count = 0;
-
                 all_placed_groups.push_back(placed_group);
+                //return all_placed_groups;
+
                 updateOccupancyMap(placed_group);
                 placed_count++;
 
@@ -672,7 +480,6 @@ namespace EBPTns {
             std::cout << "  Finished " << scaleLevelToString(level)
                 << ": placed " << placed_count << " groups"
                 << ", fill: " << (current_fill * 100) << "%"
-                << " (overlaps: " << overlap_count << ")"
                 << ", time: " << level_duration.count() / 1000.0 << " sec" << std::endl;
         }
 

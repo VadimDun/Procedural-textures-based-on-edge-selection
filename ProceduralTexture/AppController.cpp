@@ -147,8 +147,7 @@ void SynthesisWorker::doWork() {
         }
 
         // Сохраняем карту размещения
-        cv::Mat placementMap = ImageDisplay::drawPlacementMap(
-            placedGroups, outputSize_);
+        cv::Mat placementMap = ImageDisplay::drawPlacementMap(placedGroups, outputSize_);
         controller_->setPlacementMap(placementMap);
 
         emit progress(70);

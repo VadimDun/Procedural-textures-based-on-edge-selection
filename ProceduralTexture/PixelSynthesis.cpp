@@ -29,6 +29,8 @@ namespace EBPTns {
         const std::vector<PlacedGroup>& placed_groups,
         const cv::Size& size) {
 
+        auto total_start = std::chrono::high_resolution_clock::now();
+
         cv::Scalar avg_color = cv::mean(input_image);
         cv::Mat output = cv::Mat::zeros(size.height, size.width, input_image.type());
         output.setTo(avg_color);
@@ -82,7 +84,8 @@ namespace EBPTns {
                 clipped_height
             );
 
-            cv::Mat patch_part = placed.patch(patch_roi).clone();
+            //cv::Mat patch_part = placed.patch(patch_roi).clone();
+            cv::Mat patch_part = placed.patch(patch_roi);
 
             cv::Rect target_bbox(
                 intersect_left,
@@ -242,6 +245,10 @@ namespace EBPTns {
 
             groups_copied++;
         }
+
+        auto total_end = std::chrono::high_resolution_clock::now();
+        auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(total_end - total_start);
+        std::cout << "Total pixel filling time: " << total_duration.count() / 1000.0 << " sec" << std::endl;
 
         std::cout << "FillPixels: copied " << groups_copied
             << " groups (seamless: " << groups_seamless

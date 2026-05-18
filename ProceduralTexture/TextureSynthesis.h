@@ -64,21 +64,8 @@ namespace EBPTns {
         void erodeOccupancyMap(int width);
         float getOccupancyAtPoint(const cv::Point2f& point) const;
 
-        cv::Point2f generatePositionByLevel(ScaleLevel level);
+        cv::Point2f generatePositionForLarge();
         cv::Point findLargestEmptyLocation(float& radius);
-        bool checkOverlapByLevel(const PlacedGroup& new_group,
-            const std::vector<PlacedGroup>& existing_groups,
-            ScaleLevel current_level) const;
-        float computeHullIntersectionArea(
-            const std::vector<cv::Point>& hull1,
-            const std::vector<cv::Point>& hull2) const;
-
-        bool checkHullIntersection(const std::vector<cv::Point>& hull1,
-            const std::vector<cv::Point>& hull2) const;
-        bool doSegmentsIntersect(const cv::Point& p1, const cv::Point& p2,
-            const cv::Point& q1, const cv::Point& q2) const;
-        bool onSegment(const cv::Point& p, const cv::Point& q, const cv::Point& r) const;
-        bool isPointInPolygon(const cv::Point& point, const std::vector<cv::Point>& polygon) const;
 
         float generateRandomAngle(float variation);
         float generateRandomScale(float base_scale, float variation);
@@ -86,7 +73,7 @@ namespace EBPTns {
         PlacedGroup transformGroup(
             const Patch& patch,
             const cv::Mat& input_image,
-            int source_idx,
+            uint8_t source_idx,
             const cv::Point2f& position,
             float angle, float scale) const;
     };

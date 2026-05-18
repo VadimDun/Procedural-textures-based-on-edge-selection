@@ -40,7 +40,7 @@ namespace EBPTns {
         }
     }
 
-    std::vector<Edge> TextureAnalysis::extractEdges(const cv::Mat& image, cv::Mat edge_probability_map) {
+    std::vector<Edge> TextureAnalysis::extractEdges(const cv::Mat& image, const cv::Mat& edge_probability_map) {
         std::vector<Edge> edges;
 
         if (image.empty()) {
@@ -393,7 +393,7 @@ namespace EBPTns {
 
         cv::Size size = input_image.size();
 
-        int cnt = 1;
+        uint8_t cnt = 1;
         std::vector<Patch> patches;
         for (auto& group : source_infos) {
             group.hull = computeHull(group.group);

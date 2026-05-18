@@ -58,7 +58,7 @@ namespace EBPTns {
         cv::Ptr<cv::ximgproc::StructuredEdgeDetection> structured_edge_detector_;
         bool is_structured_initialized_ = false;
 
-        std::vector<Edge> extractEdges(const cv::Mat& image, cv::Mat edge_probability_map);
+        std::vector<Edge> extractEdges(const cv::Mat& image, const cv::Mat& edge_probability_map);
 
         cv::Mat computeSuperpixels(const cv::Mat& image) const;
 
